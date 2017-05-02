@@ -8,6 +8,7 @@
         constructor()
         {
             this.debug = true;
+            this.displayList = [];
         }
 
         init(canvas = null)
@@ -59,9 +60,9 @@
             w.requestAnimationFrame(update);
             function update(v)
             {
-                var t = Date.now();
+                //var t = Date.now();
                 self.update();
-                console.log( Date.now() - t );
+                //console.log( Date.now() - t );
                 w.requestAnimationFrame(update);
             }
         }
@@ -108,46 +109,54 @@
 
         update()
         {
-
-
-            function range(start,end)
-            {
-                return ( Math.random() * (end - start) | 0 ) + start;
-            }
-
-            var self = this;
             //清除画布
-            self.gl.clearColor(0, 0, 0, 0);
-            self.gl.clear(self.gl.COLOR_BUFFER_BIT);
+            this.gl.clearColor(0, 0, 0, 0);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+            this.render(this.displayList);
+        }
 
-            var arr = [];
-            var len = 10000;
-            var indices = [];
-            var index = 0;
-            var index2 = 0;
+        render(list)
+        {
+            var self = this;
+            var arr = this.posionList || (this.posionList = []);
+            var len = list.length;
+            var indices = this.indices || (this.indices = []);
+            this.index = 0;
+            this.index2 = 0;
+            this.index3 = 0;
 
             for( var i = 0;i<len;i++ )
             {
-                var index3 = i * 4;
-                var x = range(-500,500);
-                var y = range(-500,500);
-                var w = 100;
-                var h = 100;
+                var gameObect = list[i];
 
-                arr[index++] = x;arr[index++] = y;arr[index++] = 0;arr[index++] = 0;
+                arr[this.index++] = gameObect.x;
+                arr[this.index++] = gameObect.y;
+                arr[this.index++] = 0;
+                arr[this.index++] = 0;
 
-                arr[index++] = x+w;arr[index++] = y;arr[index++] = 1;arr[index++] = 0;
+                arr[this.index++] = gameObect.x+gameObect.width;
+                arr[this.index++] = gameObect.y;
+                arr[this.index++] = 1;
+                arr[this.index++] = 0;
 
-                arr[index++] = x;arr[index++] = x+h;arr[index++] = 0;arr[index++] = 1;
+                arr[this.index++] = gameObect.x;
+                arr[this.index++] = gameObect.y+gameObect.height;
+                arr[this.index++] = 0;
+                arr[this.index++] = 1;
 
-                arr[index++] = x+w;arr[index++] = x+h;arr[index++] = 1;arr[index++] = 1;
+                arr[this.index++] = gameObect.x+gameObect.width;
+                arr[this.index++] = gameObect.y+gameObect.height;
+                arr[this.index++] = 1;
+                arr[this.index++] = 1;
 
-                indices[index2++] = index3;
-                indices[index2++] = index3+1;
-                indices[index2++] = index3+2;
-                indices[index2++] = index3+2;
-                indices[index2++] = index3+1;
-                indices[index2++] = index3+3;
+                indices[this.index2++] = this.index3;
+                indices[this.index2++] = this.index3+1;
+                indices[this.index2++] = this.index3+2;
+                indices[this.index2++] = this.index3+2;
+                indices[this.index2++] = this.index3+1;
+                indices[this.index2++] = this.index3+3;
+
+                this.index3 +=4;
             }
 
             //顶点缓冲区
@@ -168,9 +177,21 @@
             self.gl.vertexAttribPointer(self.spriteProgram.posion, 4, self.gl.FLOAT, false, 0, 0);
             self.gl.uniform2f(self.spriteProgram.re, self.gl.canvas.width, self.gl.canvas.height);
             self.gl.drawElements(self.gl.TRIANGLES,indices.length,self.gl.UNSIGNED_SHORT, 0);
+
+            indices.length = 0;
+            arr.length = 0;
         }
     }
     badyoo.BYGL = BYGL;
+
+    class Maths
+    {
+        static range(start,end)
+        {
+            return ( Math.random() * (end - start) | 0 ) + start;
+        }
+    }
+    badyoo.Math = Maths;
 
     class Pool
     {
@@ -233,6 +254,8 @@
             this.scaleX = 1;
             this.scaleY = 1;
             this.rotate = 0;
+
+            badyoo.current.displayList.push(this);
         }
     }
     badyoo.GameObject = GameObject;
@@ -330,7 +353,8 @@
 
         skinLoaded(v)
         {
-            if( v.url == this.m_skin ) this.texture = v;
+            // if( v.url == this.m_skin ) 
+            this.texture = v;
         }
 
         set texture(v)
