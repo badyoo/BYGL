@@ -11,11 +11,14 @@
             this.displayList = [];
         }
 
-        init(canvas = null)
+        init(width,height,canvas)
         {
             var self = this; 
             self.window = window;
             self.canvas = canvas;
+            if( width ) self.width = width;
+            if( height ) self.height = height;
+
             if(  self.canvas == null )
             {
                 self.canvas = window.document.createElement("canvas");
@@ -23,12 +26,18 @@
                 style.position = 'absolute';
                 style.top = style.left = "0px";
                 style.background = "#000000";
-                self.canvas.width = window.innerWidth;
-                self.canvas.height = window.innerHeight;
                 window.document.body.appendChild(self.canvas);
             }
 
+            self.canvas.width = self.width ? self.width : window.innerWidth;
+            self.canvas.height = self.height ? self.height : window.innerHeight;
+
             self.gl = self.canvas.getContext("webgl");
+            if( !self.gl ) 
+            {
+                console.error("webgl Not Supported!");
+                return;
+            }
 
             var vs = `
             attribute vec4 a_position;
@@ -129,7 +138,7 @@
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
-                if( gameObect.m_texture )
+                if( gameObect.m_texture && gameObect.visible && gameObect.alpha !== 0 )
                 {
                     arr[this.index++] = gameObect.x;
                     arr[this.index++] = gameObect.y;
@@ -261,6 +270,7 @@
             this.scaleX = 1;
             this.scaleY = 1;
             this.rotate = 0;
+            this.visible = true;
 
             badyoo.current.displayList.push(this);
         }
@@ -273,14 +283,14 @@
         {
             this.url = "";
             this.type = "";
-            this.handler = null;
+            this.handler = [];
         }
 
         load(url,handler)
         {
             var self = this;
             self.url = url;
-            self.handler = handler;
+            self.handler.push(handler);
             var image = new window.Image();
             image.src = this.url;
             image.crossOrigin = "";
@@ -302,10 +312,14 @@
             {
                 var texture = new Texture(data);
                 Loader.pool[this.url] = texture;
-                if( this.handler )
+                var len = this.handler.length;
+                if( len )
                 {
-                    this.handler.run(texture);
-                    this.handler = null;
+                    for( var i = 0;i<len;i++ )
+                    {
+                        this.handler[i].run(texture);
+                    }
+                    this.handler.length = 0;
                 }
             }
             else
@@ -379,9 +393,9 @@
     badyoo.Image = Image;
 
     badyoo.current = new badyoo.BYGL();
-    badyoo.init = function(canvas)
+    badyoo.init = function(w,h,c)
     {
-        badyoo.current.init(canvas);
+        badyoo.current.init(w,h,c);
     }
 
 }(window));
