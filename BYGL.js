@@ -112,10 +112,11 @@
             //清除画布
             this.gl.clearColor(0, 0, 0, 0);
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-            this.render(this.displayList);
+            this.transform(this.displayList);
+            this.render();
         }
 
-        render(list)
+        transform(list)
         {
             var self = this;
             var arr = this.posionList || (this.posionList = []);
@@ -128,58 +129,64 @@
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
+                if( gameObect.m_texture )
+                {
+                    arr[this.index++] = gameObect.x;
+                    arr[this.index++] = gameObect.y;
+                    arr[this.index++] = 0;
+                    arr[this.index++] = 0;
 
-                arr[this.index++] = gameObect.x;
-                arr[this.index++] = gameObect.y;
-                arr[this.index++] = 0;
-                arr[this.index++] = 0;
+                    arr[this.index++] = gameObect.x+gameObect.width;
+                    arr[this.index++] = gameObect.y;
+                    arr[this.index++] = 1;
+                    arr[this.index++] = 0;
 
-                arr[this.index++] = gameObect.x+gameObect.width;
-                arr[this.index++] = gameObect.y;
-                arr[this.index++] = 1;
-                arr[this.index++] = 0;
+                    arr[this.index++] = gameObect.x;
+                    arr[this.index++] = gameObect.y+gameObect.height;
+                    arr[this.index++] = 0;
+                    arr[this.index++] = 1;
 
-                arr[this.index++] = gameObect.x;
-                arr[this.index++] = gameObect.y+gameObect.height;
-                arr[this.index++] = 0;
-                arr[this.index++] = 1;
+                    arr[this.index++] = gameObect.x+gameObect.width;
+                    arr[this.index++] = gameObect.y+gameObect.height;
+                    arr[this.index++] = 1;
+                    arr[this.index++] = 1;
 
-                arr[this.index++] = gameObect.x+gameObect.width;
-                arr[this.index++] = gameObect.y+gameObect.height;
-                arr[this.index++] = 1;
-                arr[this.index++] = 1;
+                    indices[this.index2++] = this.index3;
+                    indices[this.index2++] = this.index3+1;
+                    indices[this.index2++] = this.index3+2;
+                    indices[this.index2++] = this.index3+2;
+                    indices[this.index2++] = this.index3+1;
+                    indices[this.index2++] = this.index3+3;
 
-                indices[this.index2++] = this.index3;
-                indices[this.index2++] = this.index3+1;
-                indices[this.index2++] = this.index3+2;
-                indices[this.index2++] = this.index3+2;
-                indices[this.index2++] = this.index3+1;
-                indices[this.index2++] = this.index3+3;
-
-                this.index3 +=4;
+                    this.index3 +=4;
+                }
             }
+        }
 
+        render()
+        {
+            var self = this;
             //顶点缓冲区
-            var positionBuffer = this.positionBuffer;
-            if( positionBuffer == null ) this.positionBuffer = positionBuffer = self.gl.createBuffer();
+            var positionBuffer = self.positionBuffer;
+            if( positionBuffer == null ) self.positionBuffer = positionBuffer = self.gl.createBuffer();
             self.gl.bindBuffer(self.gl.ARRAY_BUFFER, positionBuffer)
-            self.gl.bufferData(self.gl.ARRAY_BUFFER,new Float32Array(arr),self.gl.STATIC_DRAW);
+            self.gl.bufferData(self.gl.ARRAY_BUFFER,new Float32Array(self.posionList),self.gl.STATIC_DRAW);
 
             //创建顶点索引缓冲区
-            var indexBuffer = this.indexBuffer;
-            if( indexBuffer == null ) this.indexBuffer = indexBuffer = self.gl.createBuffer();
+            var indexBuffer = self.indexBuffer;
+            if( indexBuffer == null ) self.indexBuffer = indexBuffer = self.gl.createBuffer();
             self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-            self.gl.bufferData(self.gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indices),self.gl.STATIC_DRAW);
+            self.gl.bufferData(self.gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(self.indices),self.gl.STATIC_DRAW);
 
             var program = self.spriteProgram.p;
             self.gl.useProgram(program);
             self.gl.enableVertexAttribArray(self.spriteProgram.posion);
             self.gl.vertexAttribPointer(self.spriteProgram.posion, 4, self.gl.FLOAT, false, 0, 0);
             self.gl.uniform2f(self.spriteProgram.re, self.gl.canvas.width, self.gl.canvas.height);
-            self.gl.drawElements(self.gl.TRIANGLES,indices.length,self.gl.UNSIGNED_SHORT, 0);
+            self.gl.drawElements(self.gl.TRIANGLES,self.indices.length,self.gl.UNSIGNED_SHORT, 0);
 
-            indices.length = 0;
-            arr.length = 0;
+            self.indices.length = 0;self.posionList.length = 0;
+            self.index = 0;self.index2 = 0;self.index3 = 0;
         }
     }
     badyoo.BYGL = BYGL;
