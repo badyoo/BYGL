@@ -9,6 +9,11 @@
         {
             this.debug = true;
             this.displayList = [];
+            this.G_texture = null;
+            this.G_program = null;
+            this.G_blendMode = 0;
+            this.batch = 0;
+            this.time = 0;
         }
 
         init(width,height,canvas)
@@ -29,8 +34,8 @@
                 window.document.body.appendChild(self.canvas);
             }
 
-            self.canvas.width = self.width ? self.width : window.innerWidth;
-            self.canvas.height = self.height ? self.height : window.innerHeight;
+            self.canvas.width = self.width ? self.width : self.width = window.innerWidth;
+            self.canvas.height = self.height ? self.height : self.height = window.innerHeight;
 
             self.gl = self.canvas.getContext("webgl");
             if( !self.gl ) 
@@ -38,6 +43,8 @@
                 console.error("webgl Not Supported!");
                 return;
             }
+            console.warn("init w:"+self.width+" h:"+self.height);
+
 
             var vs = `
             attribute vec4 a_position;
@@ -45,7 +52,8 @@
             varying vec2 v_texCoord;
             void main() {
                 v_texCoord = a_position.zw;
-                gl_Position = vec4(a_position.xy/u_re * 2.0,0,1);
+                vec2 temp = a_position.xy/u_re * 2.0;
+                gl_Position = vec4(temp.x,-temp.y,0,1);
             }`;
             var fs = `
             precision mediump float;
@@ -64,15 +72,20 @@
                 re:self.gl.getUniformLocation(program, "u_re")
             }
 
+            self.gl.enable(self.gl.BLEND);
+
+            self.time = Date.now();
             var w = window;
             w.requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame || w.mozRequestAnimationFrame || w.oRequestAnimationFrame || w.msRequestAnimationFrame;
             w.requestAnimationFrame(update);
             function update(v)
             {
-                //var t = Date.now();
+                var t = Date.now();
+                console.log( t -self.time);
+                self.time = t;
                 self.update();
-                //console.log( Date.now() - t );
                 w.requestAnimationFrame(update);
+                //console.log(self.batch);
             }
         }
 
@@ -105,6 +118,7 @@
         {
             var gl = this.gl;
             var texture = gl.createTexture();
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
             gl.bindTexture(gl.TEXTURE_2D, texture);
             // 非二次幂
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -113,11 +127,15 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
             // 上传
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
             return texture;
         }
 
         update()
         {
+            this.batch = 0;
+            this.G_texture = null;
+            this.G_program = null;
             //清除画布
             this.gl.clearColor(0, 0, 0, 0);
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
@@ -140,6 +158,17 @@
                 var gameObect = list[i];
                 if( gameObect.m_texture && gameObect.visible && gameObect.alpha !== 0 )
                 {
+
+                    if( (this.G_texture != null && this.G_texture != gameObect.m_texture.tex )
+                        || ( gameObect.blendMode != this.G_blendMode )
+                    )
+                    {
+                        this.render();
+                    }
+
+                    this.G_texture = gameObect.m_texture.tex;
+                    this.G_blendMode = gameObect.blendMode;
+                    
                     arr[this.index++] = gameObect.x;
                     arr[this.index++] = gameObect.y;
                     arr[this.index++] = 0;
@@ -160,7 +189,7 @@
                     arr[this.index++] = 1;
                     arr[this.index++] = 1;
 
-                    indices[this.index2++] = this.index3;
+                    indices[this.index2++] = this.index3+0;
                     indices[this.index2++] = this.index3+1;
                     indices[this.index2++] = this.index3+2;
                     indices[this.index2++] = this.index3+2;
@@ -175,6 +204,15 @@
         render()
         {
             var self = this;
+
+            //混合模式
+            if( self.G_blendMode == BlendMode.none ) self.gl.blendFunc(self.gl.ONE, self.gl.ZERO);
+            if( self.G_blendMode == BlendMode.normal ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE_MINUS_SRC_ALPHA);
+            if( self.G_blendMode == BlendMode.add ) self.gl.blendFunc(self.gl.ONE, self.gl.DST_ALPHA);
+            if( self.G_blendMode == BlendMode.multiply ) self.gl.blendFunc(self.gl.DST_COLOR, self.gl.ONE_MINUS_SRC_ALPHA);
+            if( self.G_blendMode == BlendMode.screen ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE);
+            if( self.G_blendMode == BlendMode.erase ) self.gl.blendFunc(self.gl.ZERO, self.gl.ZERO);
+
             //顶点缓冲区
             var positionBuffer = self.positionBuffer;
             if( positionBuffer == null ) self.positionBuffer = positionBuffer = self.gl.createBuffer();
@@ -187,6 +225,8 @@
             self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
             self.gl.bufferData(self.gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(self.indices),self.gl.STATIC_DRAW);
 
+            self.gl.bindTexture(self.gl.TEXTURE_2D,this.G_texture);
+
             var program = self.spriteProgram.p;
             self.gl.useProgram(program);
             self.gl.enableVertexAttribArray(self.spriteProgram.posion);
@@ -196,13 +236,14 @@
 
             self.indices.length = 0;self.posionList.length = 0;
             self.index = 0;self.index2 = 0;self.index3 = 0;
+            self.batch ++;
         }
     }
     badyoo.BYGL = BYGL;
 
     class Maths
     {
-        static range(start,end)
+        static random(start,end)
         {
             return ( Math.random() * (end - start) | 0 ) + start;
         }
@@ -258,6 +299,18 @@
     }
     badyoo.Handler = Handler;
 
+    class BlendMode
+    {
+
+    }
+    BlendMode.none = 0;
+    BlendMode.normal = 1;
+    BlendMode.add = 2;
+    BlendMode.multiply = 3;
+    BlendMode.screen = 4;
+    BlendMode.erase = 5;
+    badyoo.BlendMode = BlendMode;
+
     class GameObject
     {
         constructor()
@@ -271,6 +324,7 @@
             this.scaleY = 1;
             this.rotate = 0;
             this.visible = true;
+            this.blendMode = 0;
 
             badyoo.current.displayList.push(this);
         }
@@ -283,14 +337,14 @@
         {
             this.url = "";
             this.type = "";
-            this.handler = [];
+            this.handler = null;
         }
 
         load(url,handler)
         {
             var self = this;
             self.url = url;
-            self.handler.push(handler);
+            self.handler = handler;
             var image = new window.Image();
             image.src = this.url;
             image.crossOrigin = "";
@@ -311,16 +365,26 @@
             if( data )
             {
                 var texture = new Texture(data);
-                Loader.pool[this.url] = texture;
-                var len = this.handler.length;
-                if( len )
+                Loader.assets[this.url] = texture;
+               
+                if( this.handler.length != null )
                 {
+                    var len = this.handler.length;
                     for( var i = 0;i<len;i++ )
                     {
                         this.handler[i].run(texture);
                     }
                     this.handler.length = 0;
                 }
+                else
+                {
+                    this.handler.run(texture);
+                }
+                this.handler = null;
+                this.url = "";
+                this.type = "";
+                Pool.set(Loader,this);
+                delete Loader.pool[this.url];
             }
             else
             {
@@ -330,8 +394,26 @@
 
         static load(url,handler)
         {
-           var loader =  badyoo.Pool.get(Loader);
-           loader.load(url,handler);
+           
+           var loader = Loader.pool[url];
+           if( loader )
+           {
+                if( loader.handler instanceof Array )
+                {
+                    loader.handler.push(handler);
+                }
+                else
+                {
+                    loader.handler = [loader.handler,handler];
+                }
+           }
+           else
+           {
+                loader = Loader.pool[url] = badyoo.Pool.get(Loader);
+                loader.load(url,handler);
+           }
+        
+           
         }
         static getRES(url)
         {
@@ -339,6 +421,7 @@
         }
     }
     Loader.pool = {};
+    Loader.assets = {};
     badyoo.Loader = Loader;
 
     class Texture
