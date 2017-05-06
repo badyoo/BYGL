@@ -324,8 +324,7 @@
             this.scaleY = 1;
             this.rotate = 0;
             this.visible = true;
-            this.blendMode = 0;
-
+            this.blendMode = BlendMode.none;
             badyoo.current.displayList.push(this);
         }
     }
@@ -463,14 +462,34 @@
 
         set texture(v)
         {
-            this.width = v.width;
-            this.height = v.height;
             this.m_texture = v;
         }
 
         get texture()
         {
             return this.m_texture;
+        }
+
+        get width()
+        {
+            if( this.m_width ) return this.m_width;
+            else if( this.m_texture ) return this.m_texture.width;
+            return 0;
+        }
+        set width(v)
+        {
+            this.m_width = v;
+        }
+
+        get height()
+        {
+            if( this.m_height ) return this.m_height;
+            else if( this.m_texture ) return this.m_texture.height;
+            return 0;
+        }
+        set height(v)
+        {
+            this.m_height = v;
         }
     }
     badyoo.Image = Image;
