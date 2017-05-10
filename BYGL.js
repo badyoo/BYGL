@@ -3,19 +3,66 @@
     'use strict';
     var badyoo = {};
     window.badyoo = badyoo;
+
+    class Shader
+    {
+        constructor(vs,ps)
+        {
+            this.index = 0;
+            this.Uindex = 0;
+            this.program = badyoo.current.createProgram(vs,ps);
+        }
+
+        AttribLocation(v)
+        {
+            this["a_"+this.index++] = badyoo.current.gl.getAttribLocation(this.program,v);
+        }
+
+        AttriUniformLocation(v,num)
+        {
+            this["u_"+this.Uindex++] = 
+            [
+                badyoo.current.gl.getUniformLocation(this.program,v),
+                num
+            ];
+        }
+
+        uploadAttrib(index,size,type,normalize = false,stride = 0,offset = 0)
+        {
+            badyoo.current.gl.enableVertexAttribArray(this["a_"+index]);
+            badyoo.current.gl.vertexAttribPointer(this["a_"+index], size, type, normalize, stride, offset);
+        }
+
+        upload()
+        {
+            var num = 0;
+            for( var i = 0;i<this.Uindex;i++ )
+            {
+                var uniform = this["u_"+i];
+                if( uniform[1] == 2 )
+                {
+                    badyoo.current.gl.uniform2f(uniform[0],arguments[num],arguments[num+1]);
+                    num+=2;
+                }
+                else
+                {
+                    badyoo.current.gl.uniform1f(uniform[0],arguments[num]);
+                    num++;
+                }
+            }
+           
+        }
+    }
+
     class BYGL
     {
         constructor()
         {
             this.debug = true;
             this.displayList = [];
-            this.G_texture = null;
-            this.G_program = null;
-            this.G_blendMode = 0;
-            this.batch = 0;
             this.time = 0;
         }
-
+        
         init(width,height,canvas)
         {
             var self = this; 
@@ -63,17 +110,27 @@
                 gl_FragColor = texture2D(u_texture, v_texCoord);
             }`
             ;
+            var fsA = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform sampler2D u_texture;
+            uniform float u_alpha;
+            void main(){
+                gl_FragColor = texture2D(u_texture, v_texCoord)*u_alpha;
+            }`
+            ;
 
-            var program = self.createProgram(self.createShader(self.gl.VERTEX_SHADER,vs),self.createShader(self.gl.FRAGMENT_SHADER,fs));
-            self.spriteProgram =
-            {
-                p:program,
-                posion:self.gl.getAttribLocation(program, "a_position"),
-                re:self.gl.getUniformLocation(program, "u_re")
-            }
+            var shader = new Shader(vs,fsA);
+            shader.AttribLocation("a_position");
+            shader.AttriUniformLocation("u_re",2);
+            shader.AttriUniformLocation("u_alpha",1);
+            this.spriteAProgram = shader;
+            var shader = new Shader(vs,fs);
+            shader.AttribLocation("a_position");
+            shader.AttriUniformLocation("u_re",2);
+            this.spriteProgram = shader;
 
             self.gl.enable(self.gl.BLEND);
-
             self.time = Date.now();
             var w = window;
             w.requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame || w.mozRequestAnimationFrame || w.oRequestAnimationFrame || w.msRequestAnimationFrame;
@@ -81,37 +138,41 @@
             function update(v)
             {
                 var t = Date.now();
-                console.log( t -self.time);
+                //console.log( t -self.time);
                 self.time = t;
                 self.update();
                 w.requestAnimationFrame(update);
-                //console.log(self.batch);
+                console.log(self.batch);
             }
         }
 
-        createShader(type, source) 
+        createAttachShader(type, source) 
         {
-            var shader = this.gl.createShader(type);
-            this.gl.shaderSource(shader, source);
-            this.gl.compileShader(shader);
+            var self = this;
+            var shader = self.gl.createShader(type);
+            self.gl.shaderSource(shader, source);
+            self.gl.compileShader(shader);
 
-            var success = this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS);
+            var success = self.gl.getShaderParameter(shader, self.gl.COMPILE_STATUS);
             if (success) return shader;
 
-            if( this.debug ) console.log(this.gl.getShaderInfoLog(shader));
+            if( self.debug ) console.log(self.gl.getShaderInfoLog(shader));
 
-            this.gl.deleteShader(shader);
+            self.gl.deleteShader(shader);
         }
 
-        createProgram(vertexShader, fragmentShader) {
-            var program = this.gl.createProgram();
-            this.gl.attachShader(program, vertexShader);
-            this.gl.attachShader(program, fragmentShader);
-            this.gl.linkProgram(program);
-            var success = this.gl.getProgramParameter(program, this.gl.LINK_STATUS);
+        createProgram(vs, fs) {
+            var self = this;
+            var vertexShader = self.createAttachShader(self.gl.VERTEX_SHADER,vs)
+            var fragmentShader = self.createAttachShader(self.gl.FRAGMENT_SHADER,fs)
+            var program = self.gl.createProgram();
+            self.gl.attachShader(program, vertexShader);
+            self.gl.attachShader(program, fragmentShader);
+            self.gl.linkProgram(program);
+            var success = self.gl.getProgramParameter(program, self.gl.LINK_STATUS);
             if (success) return program;
-            if( this.debug ) console.log(this.gl.getProgramInfoLog(program));
-            this.gl.deleteProgram(program);
+            if( self.debug ) console.log(self.gl.getProgramInfoLog(program));
+            self.gl.deleteProgram(program);
         }
 
         uploadTexture(img)
@@ -133,9 +194,7 @@
 
         update()
         {
-            this.batch = 0;
-            this.G_texture = null;
-            this.G_program = null;
+            this.resetRender();
             //清除画布
             this.gl.clearColor(0, 0, 0, 0);
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
@@ -160,14 +219,15 @@
                 {
 
                     if( (this.G_texture != null && this.G_texture != gameObect.m_texture.tex )
-                        || ( gameObect.blendMode != this.G_blendMode )
-                    )
+                        || ( this.G_blendMode != null && gameObect.blendMode != this.G_blendMode )
+                        || ( gameObect.alpha != this.G_alpha ))
                     {
                         this.render();
                     }
 
                     this.G_texture = gameObect.m_texture.tex;
                     this.G_blendMode = gameObect.blendMode;
+                    this.G_alpha = gameObect.alpha;
                     
                     arr[this.index++] = gameObect.x;
                     arr[this.index++] = gameObect.y;
@@ -201,37 +261,44 @@
             }
         }
 
+        resetRender()
+        {
+            this.G_texture = null;
+            this.G_program = null;
+            this.G_blendMode = null;
+            this.G_alpha = 1;
+            this.batch = 0;
+        }
+
         render()
         {
             var self = this;
-
             //混合模式
-            if( self.G_blendMode == BlendMode.none ) self.gl.blendFunc(self.gl.ONE, self.gl.ZERO);
-            if( self.G_blendMode == BlendMode.normal ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE_MINUS_SRC_ALPHA);
-            if( self.G_blendMode == BlendMode.add ) self.gl.blendFunc(self.gl.ONE, self.gl.DST_ALPHA);
-            if( self.G_blendMode == BlendMode.multiply ) self.gl.blendFunc(self.gl.DST_COLOR, self.gl.ONE_MINUS_SRC_ALPHA);
-            if( self.G_blendMode == BlendMode.screen ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE);
-            if( self.G_blendMode == BlendMode.erase ) self.gl.blendFunc(self.gl.ZERO, self.gl.ZERO);
+            if( self.G_blendMode == BlendMode.NONE ) self.gl.blendFunc(self.gl.ONE, self.gl.ZERO);
+            if( self.G_blendMode == BlendMode.NORMAL ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE_MINUS_SRC_ALPHA);
+            if( self.G_blendMode == BlendMode.ADD ) self.gl.blendFunc(self.gl.ONE, self.gl.DST_ALPHA);
+            if( self.G_blendMode == BlendMode.MULTIPLY ) self.gl.blendFunc(self.gl.DST_COLOR, self.gl.ONE_MINUS_SRC_ALPHA);
+            if( self.G_blendMode == BlendMode.SCREEN ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE);
+            if( self.G_blendMode == BlendMode.ERASE ) self.gl.blendFunc(self.gl.ZERO, self.gl.ZERO);
 
+            var shader = self.spriteProgram;
+            if( self.G_alpha != 1 ) shader = self.spriteAProgram;
+            self.gl.useProgram(shader.program);
+            shader.upload(self.gl.canvas.width,self.gl.canvas.height,self.G_alpha);
             //顶点缓冲区
             var positionBuffer = self.positionBuffer;
             if( positionBuffer == null ) self.positionBuffer = positionBuffer = self.gl.createBuffer();
             self.gl.bindBuffer(self.gl.ARRAY_BUFFER, positionBuffer)
             self.gl.bufferData(self.gl.ARRAY_BUFFER,new Float32Array(self.posionList),self.gl.STATIC_DRAW);
-
+            shader.uploadAttrib(0,4,self.gl.FLOAT);
             //创建顶点索引缓冲区
             var indexBuffer = self.indexBuffer;
             if( indexBuffer == null ) self.indexBuffer = indexBuffer = self.gl.createBuffer();
             self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
             self.gl.bufferData(self.gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(self.indices),self.gl.STATIC_DRAW);
-
+            //纹理
             self.gl.bindTexture(self.gl.TEXTURE_2D,this.G_texture);
-
-            var program = self.spriteProgram.p;
-            self.gl.useProgram(program);
-            self.gl.enableVertexAttribArray(self.spriteProgram.posion);
-            self.gl.vertexAttribPointer(self.spriteProgram.posion, 4, self.gl.FLOAT, false, 0, 0);
-            self.gl.uniform2f(self.spriteProgram.re, self.gl.canvas.width, self.gl.canvas.height);
+            //绘制
             self.gl.drawElements(self.gl.TRIANGLES,self.indices.length,self.gl.UNSIGNED_SHORT, 0);
 
             self.indices.length = 0;self.posionList.length = 0;
@@ -284,12 +351,12 @@
         free(pool = false)
         {
             this.args = this.callback = this.pointer = null;
-            if( pool )  badyoo.Pool.set(Handler,this);
+            if( pool )  Pool.set(Handler,this);
         }
 
         static create(pointer,callback,args,one = true)
         {
-            var h = badyoo.Pool.get(Handler);
+            var h = Pool.get(Handler);
             h.pointer = pointer;
             h.callback = callback;
             h.args = args;
@@ -303,12 +370,12 @@
     {
 
     }
-    BlendMode.none = 0;
-    BlendMode.normal = 1;
-    BlendMode.add = 2;
-    BlendMode.multiply = 3;
-    BlendMode.screen = 4;
-    BlendMode.erase = 5;
+    BlendMode.NONE = 0;
+    BlendMode.NORMAL = 1;
+    BlendMode.ADD = 2;
+    BlendMode.MULTIPLY = 3;
+    BlendMode.SCREEN = 4;
+    BlendMode.ERASE = 5;
     badyoo.BlendMode = BlendMode;
 
     class GameObject
@@ -317,6 +384,8 @@
         {
             this.x = 0;
             this.y = 0;
+            this.pivotX = 0;
+            this.pivotY = 0;
             this.width = 0;
             this.height = 0;
             this.alpha = 1;
@@ -324,9 +393,11 @@
             this.scaleY = 1;
             this.rotate = 0;
             this.visible = true;
-            this.blendMode = BlendMode.none;
+            this.blendMode = BlendMode.NORMAL;
             badyoo.current.displayList.push(this);
         }
+
+        free(){}
     }
     badyoo.GameObject = GameObject;
 
@@ -364,6 +435,7 @@
             if( data )
             {
                 var texture = new Texture(data);
+                texture.url = this.url;
                 Loader.assets[this.url] = texture;
                
                 if( this.handler.length != null )
@@ -408,7 +480,7 @@
            }
            else
            {
-                loader = Loader.pool[url] = badyoo.Pool.get(Loader);
+                loader = Loader.pool[url] = Pool.get(Loader);
                 loader.load(url,handler);
            }
         
@@ -432,7 +504,6 @@
             this.u = 1;
             this.v = 1;
             this.tex = badyoo.current.uploadTexture(data);
-            this.url = data.src;
         }
     }
     badyoo.Texture = Texture;
@@ -456,8 +527,7 @@
 
         skinLoaded(v)
         {
-            // if( v.url == this.m_skin ) 
-            this.texture = v;
+            if( v.url == this.m_skin ) this.texture = v;
         }
 
         set texture(v)
@@ -495,9 +565,6 @@
     badyoo.Image = Image;
 
     badyoo.current = new badyoo.BYGL();
-    badyoo.init = function(w,h,c)
-    {
-        badyoo.current.init(w,h,c);
-    }
+    badyoo.init = function(w,h,c){badyoo.current.init(w,h,c)};
 
 }(window));
