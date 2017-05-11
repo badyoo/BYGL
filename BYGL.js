@@ -84,7 +84,12 @@
             self.canvas.width = self.width ? self.width : self.width = window.innerWidth;
             self.canvas.height = self.height ? self.height : self.height = window.innerHeight;
 
-            self.gl = self.canvas.getContext("webgl");
+            self.gl = self.canvas.getContext("webgl",
+            { 
+                antialias: false, 
+                premultipliedAlpha: true
+            }
+            );
             if( !self.gl ) 
             {
                 console.error("webgl Not Supported!");
@@ -100,7 +105,7 @@
             void main() {
                 v_texCoord = a_position.zw;
                 vec2 temp = a_position.xy/u_re * 2.0;
-                gl_Position = vec4(temp.x,-temp.y,0,1);
+                gl_Position = vec4(temp.x,temp.y,0,1);
             }`;
             var fs = `
             precision mediump float;
@@ -130,6 +135,8 @@
             shader.AttriUniformLocation("u_re",2);
             this.spriteProgram = shader;
 
+            this.indexBuffer = this.createIndexBuffer(70000);
+
             self.gl.enable(self.gl.BLEND);
             self.time = Date.now();
             var w = window;
@@ -138,12 +145,34 @@
             function update(v)
             {
                 var t = Date.now();
-                //console.log( t -self.time);
+                console.log( t -self.time);
                 self.time = t;
                 self.update();
                 w.requestAnimationFrame(update);
-                console.log(self.batch);
+                //console.log(self.batch);
             }
+        }
+
+        createIndexBuffer(num)
+        {
+            var self = this;
+            var buffer = new ArrayBuffer(num  * 2 * 6);
+            var uint16Array = new Uint16Array(buffer);
+            for( var i = 0;i<num;i++ )
+            {
+                var index = i * 6;
+                var index3 = i * 4;
+                uint16Array[index++] = index3;
+                uint16Array[index++] = index3+1;
+                uint16Array[index++] = index3+2;
+                uint16Array[index++] = index3+2;
+                uint16Array[index++] = index3+1;
+                uint16Array[index++] = index3+3;
+            }
+            var indexBuffer = self.gl.createBuffer();
+            self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            self.gl.bufferData(self.gl.ELEMENT_ARRAY_BUFFER,uint16Array,self.gl.STATIC_DRAW);
+            return indexBuffer;
         }
 
         createAttachShader(type, source) 
@@ -207,14 +236,11 @@
             var self = this;
             var arr = this.posionList || (this.posionList = []);
             var len = list.length;
-            var indices = this.indices || (this.indices = []);
             this.index = 0;
-            this.index2 = 0;
-            this.index3 = 0;
-
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
+                gameObect.rotation +=1;
                 if( gameObect.m_texture && gameObect.visible && gameObect.alpha !== 0 )
                 {
 
@@ -228,35 +254,46 @@
                     this.G_texture = gameObect.m_texture.tex;
                     this.G_blendMode = gameObect.blendMode;
                     this.G_alpha = gameObect.alpha;
+
+                    var tx = gameObect.x;
+                    var ty = gameObect.y;
+                    var w = gameObect.width * gameObect.scaleX;
+                    var h = gameObect.height * gameObect.scaleY;
+                    var wa = w;
+                    var wd = 0;
+                    var ha = 0;
+                    var hd = h;
+
+                    if( gameObect.rotate != 0 )
+                    {
+                        var c = Math.cos(gameObect.rotate);
+                        var s = Math.sin(gameObect.rotate);
+                        wa = w * c;
+                        wd = -w * s;
+                        ha = h * s;
+                        hd = h * c;
+                    }
                     
-                    arr[this.index++] = gameObect.x;
-                    arr[this.index++] = gameObect.y;
+                    arr[this.index++] = tx;
+                    arr[this.index++] = ty;
                     arr[this.index++] = 0;
                     arr[this.index++] = 0;
 
-                    arr[this.index++] = gameObect.x+gameObect.width;
-                    arr[this.index++] = gameObect.y;
+                    arr[this.index++] = tx+wa;
+                    arr[this.index++] = ty+wd;
                     arr[this.index++] = 1;
                     arr[this.index++] = 0;
 
-                    arr[this.index++] = gameObect.x;
-                    arr[this.index++] = gameObect.y+gameObect.height;
+                    arr[this.index++] = tx+ha;
+                    arr[this.index++] = ty+hd;
                     arr[this.index++] = 0;
                     arr[this.index++] = 1;
 
-                    arr[this.index++] = gameObect.x+gameObect.width;
-                    arr[this.index++] = gameObect.y+gameObect.height;
+                    arr[this.index++] = tx+wa+ha;
+                    arr[this.index++] = ty+wd+hd;
                     arr[this.index++] = 1;
                     arr[this.index++] = 1;
-
-                    indices[this.index2++] = this.index3+0;
-                    indices[this.index2++] = this.index3+1;
-                    indices[this.index2++] = this.index3+2;
-                    indices[this.index2++] = this.index3+2;
-                    indices[this.index2++] = this.index3+1;
-                    indices[this.index2++] = this.index3+3;
-
-                    this.index3 +=4;
+                    this.drawNum+=6;
                 }
             }
         }
@@ -268,6 +305,8 @@
             this.G_blendMode = null;
             this.G_alpha = 1;
             this.batch = 0;
+            this.drawNum = 0;
+            this.drawStart = 0;
         }
 
         render()
@@ -293,16 +332,14 @@
             shader.uploadAttrib(0,4,self.gl.FLOAT);
             //创建顶点索引缓冲区
             var indexBuffer = self.indexBuffer;
-            if( indexBuffer == null ) self.indexBuffer = indexBuffer = self.gl.createBuffer();
             self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-            self.gl.bufferData(self.gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(self.indices),self.gl.STATIC_DRAW);
+           
             //纹理
             self.gl.bindTexture(self.gl.TEXTURE_2D,this.G_texture);
             //绘制
-            self.gl.drawElements(self.gl.TRIANGLES,self.indices.length,self.gl.UNSIGNED_SHORT, 0);
-
-            self.indices.length = 0;self.posionList.length = 0;
-            self.index = 0;self.index2 = 0;self.index3 = 0;
+            self.gl.drawElements(self.gl.TRIANGLES,self.drawNum,self.gl.UNSIGNED_SHORT, self.drawStart);
+            self.drawStart = 0;
+            self.drawNum = self.index = self.posionList.length = 0;
             self.batch ++;
         }
     }
@@ -393,8 +430,20 @@
             this.scaleY = 1;
             this.rotate = 0;
             this.visible = true;
+            this.m_rotation = 0;
             this.blendMode = BlendMode.NORMAL;
             badyoo.current.displayList.push(this);
+        }
+
+        get rotation()
+        {
+            return this.m_rotation;
+        }
+
+        set rotation(v)
+        {
+            this.m_rotation = v;
+            this.rotate =  v/180 * Math.PI;
         }
 
         free(){}
