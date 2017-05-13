@@ -60,9 +60,9 @@
         {
             this.debug = true;
             this.displayList = [];
-            this.time = 0;
-        }
-        
+            this.randerList = [];
+            this.G_a = this.G_r = this.G_g = this.G_b = 0;
+        }        
         init(width,height,canvas)
         {
             var self = this; 
@@ -98,21 +98,22 @@
             console.warn("init w:"+self.width+" h:"+self.height);
 
 
-            var vs = `
-            attribute vec4 a_position;
+            var vs = `attribute vec4 a_position;
             uniform vec2 u_re;
             varying vec2 v_texCoord;
             void main() {
                 v_texCoord = a_position.zw;
                 vec2 temp = a_position.xy/u_re * 2.0;
-                gl_Position = vec4(temp.x,temp.y,0,1);
+                gl_Position = vec4(temp.x,-temp.y,0,1);
             }`;
             var fs = `
             precision mediump float;
             varying vec2 v_texCoord;
             uniform sampler2D u_texture;
             void main(){
-                gl_FragColor = texture2D(u_texture, v_texCoord);
+                //gl_FragColor = texture2D(u_texture, v_texCoord);
+                gl_FragColor = vec4(0.5,0.5,0.5,0.5);
+
             }`
             ;
             var fsA = `
@@ -134,10 +135,13 @@
             shader.AttribLocation("a_position");
             shader.AttriUniformLocation("u_re",2);
             this.spriteProgram = shader;
-
-            this.indexBuffer = this.createIndexBuffer(70000);
-
-            self.gl.enable(self.gl.BLEND);
+            this.indexBuffer = this.createIndexBuffer(65536/4);
+            for( var i = -720;i<=720;i++ )
+            {
+                var a = i * Math.PI / 180;
+                Maths.sin[i] = Math.sin(a);
+                Maths.cos[i] = Math.cos(a);
+            }
             self.time = Date.now();
             var w = window;
             w.requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame || w.mozRequestAnimationFrame || w.oRequestAnimationFrame || w.msRequestAnimationFrame;
@@ -145,16 +149,18 @@
             function update(v)
             {
                 var t = Date.now();
-                console.log( t -self.time);
+                //console.log( t -self.time);
                 self.time = t;
                 self.update();
                 w.requestAnimationFrame(update);
-                //console.log(self.batch);
+                console.log(self.batch);
             }
         }
 
         createIndexBuffer(num)
         {
+            //Indexbuffer webgl1.0 只支持16位uint
+            if( num  > 16384 ) num = 16384;
             var self = this;
             var buffer = new ArrayBuffer(num  * 2 * 6);
             var uint16Array = new Uint16Array(buffer);
@@ -225,35 +231,50 @@
         {
             this.resetRender();
             //清除画布
-            this.gl.clearColor(0, 0, 0, 0);
+            this.gl.clearColor(this.G_r, this.G_g, this.G_b, this.G_a);
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
             this.transform(this.displayList);
-            this.render();
+            this.randerList.push([this.drawNum,this.drawStart,this.G_texture,this.G_NBlendMode,this.G_alpha]);
+            this.drawNum = 0;
+            //顶点缓冲区
+            var positionBuffer = this.positionBuffer;
+            if( positionBuffer == null && this.posionList.length ) 
+            {
+                this.positionBuffer = positionBuffer = this.gl.createBuffer();
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer)
+                this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(this.posionList),this.gl.STATIC_DRAW);
+            }
+             for( var i = 0;i<this.randerList.length;i++ )
+            {
+                this.render(this.randerList[i]);
+            }
+            
         }
 
         transform(list)
         {
             var self = this;
-            var arr = this.posionList || (this.posionList = []);
+            var arr = self.posionList || (self.posionList = []);
             var len = list.length;
-            this.index = 0;
+            self.index = 0;
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
-                gameObect.rotation +=1;
+                //gameObect.rotation +=1;
                 if( gameObect.m_texture && gameObect.visible && gameObect.alpha !== 0 )
                 {
-
-                    if( (this.G_texture != null && this.G_texture != gameObect.m_texture.tex )
-                        || ( this.G_blendMode != null && gameObect.blendMode != this.G_blendMode )
-                        || ( gameObect.alpha != this.G_alpha ))
+                    if( (self.G_texture != null && self.G_texture != gameObect.m_texture.tex )
+                        || (  self.G_blendMode != null && gameObect.blendMode != self.G_blendMode )
+                        || ( gameObect.alpha != self.G_alpha ))
                     {
-                        this.render();
+                        self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
+                        self.drawStart = i*6;
+                        self.drawNum = 0;
                     }
 
-                    this.G_texture = gameObect.m_texture.tex;
-                    this.G_blendMode = gameObect.blendMode;
-                    this.G_alpha = gameObect.alpha;
+                    self.G_texture = gameObect.m_texture.tex;
+                    self.G_NBlendMode = gameObect.blendMode;
+                    self.G_alpha = gameObect.alpha;
 
                     var tx = gameObect.x;
                     var ty = gameObect.y;
@@ -263,11 +284,11 @@
                     var wd = 0;
                     var ha = 0;
                     var hd = h;
-
-                    if( gameObect.rotate != 0 )
+                    var r = gameObect.rotation;
+                    if( r != 0 )
                     {
-                        var c = Math.cos(gameObect.rotate);
-                        var s = Math.sin(gameObect.rotate);
+                        var c = Maths.cos[r];
+                        var s = Maths.sin[r];
                         wa = w * c;
                         wd = -w * s;
                         ha = h * s;
@@ -300,46 +321,42 @@
 
         resetRender()
         {
+            this.randerList.length = 0;
             this.G_texture = null;
             this.G_program = null;
-            this.G_blendMode = null;
             this.G_alpha = 1;
             this.batch = 0;
             this.drawNum = 0;
             this.drawStart = 0;
         }
 
-        render()
+        render(arr)
         {
+            if( arr[0] == 0 ) return;
             var self = this;
+            self.G_alpha = arr[4];
+            this.G_texture = arr[2];
             //混合模式
-            if( self.G_blendMode == BlendMode.NONE ) self.gl.blendFunc(self.gl.ONE, self.gl.ZERO);
-            if( self.G_blendMode == BlendMode.NORMAL ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE_MINUS_SRC_ALPHA);
-            if( self.G_blendMode == BlendMode.ADD ) self.gl.blendFunc(self.gl.ONE, self.gl.DST_ALPHA);
-            if( self.G_blendMode == BlendMode.MULTIPLY ) self.gl.blendFunc(self.gl.DST_COLOR, self.gl.ONE_MINUS_SRC_ALPHA);
-            if( self.G_blendMode == BlendMode.SCREEN ) self.gl.blendFunc(self.gl.ONE, self.gl.ONE);
-            if( self.G_blendMode == BlendMode.ERASE ) self.gl.blendFunc(self.gl.ZERO, self.gl.ZERO);
+            if( self.G_blendMode != arr[3] )
+            {
+                self.G_blendMode = arr[3];
+                self.gl.enable(self.gl.BLEND);
+                BlendMode["b"+this.G_blendMode](self.gl);
+            }
 
             var shader = self.spriteProgram;
             if( self.G_alpha != 1 ) shader = self.spriteAProgram;
             self.gl.useProgram(shader.program);
             shader.upload(self.gl.canvas.width,self.gl.canvas.height,self.G_alpha);
             //顶点缓冲区
-            var positionBuffer = self.positionBuffer;
-            if( positionBuffer == null ) self.positionBuffer = positionBuffer = self.gl.createBuffer();
-            self.gl.bindBuffer(self.gl.ARRAY_BUFFER, positionBuffer)
-            self.gl.bufferData(self.gl.ARRAY_BUFFER,new Float32Array(self.posionList),self.gl.STATIC_DRAW);
+            self.gl.bindBuffer(self.gl.ARRAY_BUFFER, self.positionBuffer)
             shader.uploadAttrib(0,4,self.gl.FLOAT);
-            //创建顶点索引缓冲区
-            var indexBuffer = self.indexBuffer;
-            self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-           
+            //顶点索引缓冲区
+            self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER,self.indexBuffer);
             //纹理
             self.gl.bindTexture(self.gl.TEXTURE_2D,this.G_texture);
             //绘制
-            self.gl.drawElements(self.gl.TRIANGLES,self.drawNum,self.gl.UNSIGNED_SHORT, self.drawStart);
-            self.drawStart = 0;
-            self.drawNum = self.index = self.posionList.length = 0;
+            self.gl.drawElements(self.gl.TRIANGLES,arr[0],self.gl.UNSIGNED_SHORT, arr[1]);
             self.batch ++;
         }
     }
@@ -352,6 +369,9 @@
             return ( Math.random() * (end - start) | 0 ) + start;
         }
     }
+    Maths.cos ={};
+    Maths.sin ={};
+
     badyoo.Math = Maths;
 
     class Pool
@@ -405,7 +425,30 @@
 
     class BlendMode
     {
-
+        static b0(gl)
+        {
+           gl.blendFunc(gl.ONE,gl.ZERO);
+        }
+        static b1(gl)
+        {
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        }
+        static b2(gl)
+        {
+            gl.blendFunc(gl.ONE,gl.DST_ALPHA);
+        }
+        static b3(gl)
+        {
+            gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);
+        }
+        static b4(gl)
+        {
+            gl.blendFunc(gl.ONE, gl.ONE);
+        }
+        static b5(gl)
+        {
+            gl.blendFunc(gl.ZERO, gl.ZERO);
+        }
     }
     BlendMode.NONE = 0;
     BlendMode.NORMAL = 1;
@@ -428,24 +471,11 @@
             this.alpha = 1;
             this.scaleX = 1;
             this.scaleY = 1;
-            this.rotate = 0;
             this.visible = true;
-            this.m_rotation = 0;
+            this.rotation = 0;
             this.blendMode = BlendMode.NORMAL;
             badyoo.current.displayList.push(this);
         }
-
-        get rotation()
-        {
-            return this.m_rotation;
-        }
-
-        set rotation(v)
-        {
-            this.m_rotation = v;
-            this.rotate =  v/180 * Math.PI;
-        }
-
         free(){}
     }
     badyoo.GameObject = GameObject;
@@ -615,5 +645,12 @@
 
     badyoo.current = new badyoo.BYGL();
     badyoo.init = function(w,h,c){badyoo.current.init(w,h,c)};
+    badyoo.bgColor = function( color )
+    {
+        badyoo.current.G_a = ((color >> 24) & 0xff) / 255.0;
+        badyoo.current.G_r = ((color >> 16) & 0xff) / 255.0;
+        badyoo.current.G_g = ((color >> 8) & 0xff) / 255.0;
+        badyoo.current.G_b = (color & 0xff) / 255.0;
+    }
 
 }(window));
