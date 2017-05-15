@@ -111,8 +111,8 @@
             varying vec2 v_texCoord;
             uniform sampler2D u_texture;
             void main(){
-                //gl_FragColor = texture2D(u_texture, v_texCoord);
-                gl_FragColor = vec4(0.5,0.5,0.5,0.5);
+                gl_FragColor = texture2D(u_texture, v_texCoord);
+                //gl_FragColor = vec4(0.5,0.5,0.5,0.5);
 
             }`
             ;
@@ -238,12 +238,10 @@
             this.drawNum = 0;
             //顶点缓冲区
             var positionBuffer = this.positionBuffer;
-            if( positionBuffer == null && this.posionList.length ) 
-            {
-                this.positionBuffer = positionBuffer = this.gl.createBuffer();
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer)
-                this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(this.posionList),this.gl.STATIC_DRAW);
-            }
+            if( positionBuffer == null ) this.positionBuffer = positionBuffer = this.gl.createBuffer();
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer)
+            this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(this.posionList),this.gl.STATIC_DRAW);
+       
              for( var i = 0;i<this.randerList.length;i++ )
             {
                 this.render(this.randerList[i]);
@@ -260,7 +258,7 @@
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
-                //gameObect.rotation +=1;
+                gameObect.rotation +=1;
                 if( gameObect.m_texture && gameObect.visible && gameObect.alpha !== 0 )
                 {
                     if( (self.G_texture != null && self.G_texture != gameObect.m_texture.tex )
@@ -268,7 +266,7 @@
                         || ( gameObect.alpha != self.G_alpha ))
                     {
                         self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
-                        self.drawStart = i*6;
+                        self.drawStart = i*12;
                         self.drawNum = 0;
                     }
 
