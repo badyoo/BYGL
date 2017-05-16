@@ -13,18 +13,19 @@
             this.program = badyoo.current.createProgram(vs,ps);
         }
 
+        bind()
+        {
+            badyoo.current.gl.useProgram(this.program);
+        }
+
         AttribLocation(v)
         {
             this["a_"+this.index++] = badyoo.current.gl.getAttribLocation(this.program,v);
         }
 
-        AttriUniformLocation(v,num)
+        AttriUniformLocation(v)
         {
-            this["u_"+this.Uindex++] = 
-            [
-                badyoo.current.gl.getUniformLocation(this.program,v),
-                num
-            ];
+            this["u_"+this.Uindex++] = badyoo.current.gl.getUniformLocation(this.program,v);
         }
 
         uploadAttrib(index,size,type,normalize = false,stride = 0,offset = 0)
@@ -33,25 +34,16 @@
             badyoo.current.gl.vertexAttribPointer(this["a_"+index], size, type, normalize, stride, offset);
         }
 
-        upload()
+        uploadUniform2f(index,a,b)
         {
-            var num = 0;
-            for( var i = 0;i<this.Uindex;i++ )
-            {
-                var uniform = this["u_"+i];
-                if( uniform[1] == 2 )
-                {
-                    badyoo.current.gl.uniform2f(uniform[0],arguments[num],arguments[num+1]);
-                    num+=2;
-                }
-                else
-                {
-                    badyoo.current.gl.uniform1f(uniform[0],arguments[num]);
-                    num++;
-                }
-            }
-           
+            if( this["u_"+index] ) badyoo.current.gl.uniform2f(this["u_"+index],a,b);
         }
+
+        uploadUniform1f(index,a)
+        {
+            if( this["u_"+index] ) badyoo.current.gl.uniform2f(this["u_"+index],a);
+        }
+
     }
 
     class BYGL
@@ -63,11 +55,12 @@
             this.randerList = [];
             this.G_a = this.G_r = this.G_g = this.G_b = 0;
         }        
-        init(width,height,canvas)
+        init(width,height,alignC,canvas)
         {
             var self = this; 
             self.window = window;
             self.canvas = canvas;
+            self.alignC = alignC;
             if( width ) self.width = width;
             if( height ) self.height = height;
 
@@ -103,7 +96,8 @@
             varying vec2 v_texCoord;
             void main() {
                 v_texCoord = a_position.zw;
-                vec2 temp = a_position.xy/u_re * 2.0;
+                vec2 temp = a_position.xy/u_re * 2.0 `+(self.alignC == false ? "- 1.0;":";")+
+            `
                 gl_Position = vec4(temp.x,-temp.y,0,1);
             }`;
             var fs = `
@@ -112,8 +106,6 @@
             uniform sampler2D u_texture;
             void main(){
                 gl_FragColor = texture2D(u_texture, v_texCoord);
-                //gl_FragColor = vec4(0.5,0.5,0.5,0.5);
-
             }`
             ;
             var fsA = `
@@ -128,12 +120,16 @@
 
             var shader = new Shader(vs,fsA);
             shader.AttribLocation("a_position");
-            shader.AttriUniformLocation("u_re",2);
-            shader.AttriUniformLocation("u_alpha",1);
+            shader.AttriUniformLocation("u_re");
+            shader.AttriUniformLocation("u_alpha");
+            shader.bind();
+            shader.uploadUniform2f(0,self.gl.canvas.width,self.gl.canvas.height);
             this.spriteAProgram = shader;
             var shader = new Shader(vs,fs);
             shader.AttribLocation("a_position");
-            shader.AttriUniformLocation("u_re",2);
+            shader.AttriUniformLocation("u_re");
+            shader.bind();
+            shader.uploadUniform2f(0,self.gl.canvas.width,self.gl.canvas.height);
             this.spriteProgram = shader;
             this.indexBuffer = this.createIndexBuffer(65536/4);
             for( var i = -720;i<=720;i++ )
@@ -266,7 +262,7 @@
                         || ( gameObect.alpha != self.G_alpha ))
                     {
                         self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
-                        self.drawStart = i*12;
+                        self.drawStart = i*12;//原先是*6，但是显示异常，多间隔一个矩形，显示就不会异常了，不知道为什么~
                         self.drawNum = 0;
                     }
 
@@ -274,7 +270,7 @@
                     self.G_NBlendMode = gameObect.blendMode;
                     self.G_alpha = gameObect.alpha;
 
-                    var tx = gameObect.x;
+                    var tx = gameObect.x
                     var ty = gameObect.y;
                     var w = gameObect.width * gameObect.scaleX;
                     var h = gameObect.height * gameObect.scaleY;
@@ -285,12 +281,13 @@
                     var r = gameObect.rotation;
                     if( r != 0 )
                     {
+                        r = 360 - r;
                         var c = Maths.cos[r];
                         var s = Maths.sin[r];
-                        wa = w * c;
-                        wd = -w * s;
-                        ha = h * s;
-                        hd = h * c;
+                        wa = w * c + 0 * s;
+                        wd = 0 * c - w * s;
+                        ha = 0 * c + h * s;
+                        hd = h * c - 0 * s;
                     }
                     
                     arr[this.index++] = tx;
@@ -342,10 +339,9 @@
                 BlendMode["b"+this.G_blendMode](self.gl);
             }
 
-            var shader = self.spriteProgram;
-            if( self.G_alpha != 1 ) shader = self.spriteAProgram;
-            self.gl.useProgram(shader.program);
-            shader.upload(self.gl.canvas.width,self.gl.canvas.height,self.G_alpha);
+            var shader = self.G_alpha != 1 ?  self.spriteAProgram : self.spriteProgram;
+            shader.bind();
+            shader.uploadUniform1f(1,self.G_alpha);
             //顶点缓冲区
             self.gl.bindBuffer(self.gl.ARRAY_BUFFER, self.positionBuffer)
             shader.uploadAttrib(0,4,self.gl.FLOAT);
@@ -642,7 +638,10 @@
     badyoo.Image = Image;
 
     badyoo.current = new badyoo.BYGL();
-    badyoo.init = function(w,h,c){badyoo.current.init(w,h,c)};
+    badyoo.init = function(w,h,ac = true,c = null)
+    {
+        badyoo.current.init(w,h,ac,c);
+    };
     badyoo.bgColor = function( color )
     {
         badyoo.current.G_a = ((color >> 24) & 0xff) / 255.0;
