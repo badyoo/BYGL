@@ -54,6 +54,7 @@
             this.displayList = [];
             this.randerList = [];
             this.G_a = this.G_r = this.G_g = this.G_b = 0;
+            this.G_m = new Matrix();
         }        
         init(width,height,alignC,canvas)
         {
@@ -270,43 +271,45 @@
                     self.G_NBlendMode = gameObect.blendMode;
                     self.G_alpha = gameObect.alpha;
 
-                    var tx = gameObect.x
+                    var w = gameObect.width;
+                    var h = gameObect.height;
+                    var tx = gameObect.x;
                     var ty = gameObect.y;
-                    var w = gameObect.width * gameObect.scaleX;
-                    var h = gameObect.height * gameObect.scaleY;
-                    var wa = w;
-                    var wd = 0;
-                    var ha = 0;
-                    var hd = h;
+
+                    var a = gameObect.scaleX * w;
+                    var b = 0;
+                    var c = 0;
+                    var d = gameObect.scaleY * h;
+
                     var r = gameObect.rotation;
                     if( r != 0 )
                     {
-                        r = 360 - r;
-                        var c = Maths.cos[r];
-                        var s = Maths.sin[r];
-                        wa = w * c + 0 * s;
-                        wd = 0 * c - w * s;
-                        ha = 0 * c + h * s;
-                        hd = h * c - 0 * s;
+                        r =  360 - r;
+                        var cos = Maths.cos[r];
+                        var sin = Maths.sin[r];
+                        a =  gameObect.scaleX * cos  * w;
+                        b =  gameObect.scaleX * -sin * w;
+                        c =  gameObect.scaleY * sin  * h;
+                        d =  gameObect.scaleY * cos  * h;
                     }
-                    
+
                     arr[this.index++] = tx;
                     arr[this.index++] = ty;
                     arr[this.index++] = 0;
                     arr[this.index++] = 0;
 
-                    arr[this.index++] = tx+wa;
-                    arr[this.index++] = ty+wd;
+                    arr[this.index++] = tx+a;
+                    arr[this.index++] = ty+b;
                     arr[this.index++] = 1;
                     arr[this.index++] = 0;
 
-                    arr[this.index++] = tx+ha;
-                    arr[this.index++] = ty+hd;
+                    arr[this.index++] = tx+c;
+                    arr[this.index++] = ty+d;
                     arr[this.index++] = 0;
                     arr[this.index++] = 1;
 
-                    arr[this.index++] = tx+wa+ha;
-                    arr[this.index++] = ty+wd+hd;
+                    arr[this.index++] = tx+a+c;
+                    arr[this.index++] = ty+b+d;
                     arr[this.index++] = 1;
                     arr[this.index++] = 1;
                     this.drawNum+=6;
@@ -355,6 +358,52 @@
         }
     }
     badyoo.BYGL = BYGL;
+
+    class Matrix
+    {
+        set(a = 1, b = 0,c = 0,d = 1,tx = 0,ty = 0)
+        {
+            this.a = a;//x1
+            this.b = b;//x1
+            this.c = c;//y1
+            this.d = d;//y1
+            this.tx =tx;
+            this.ty =ty;
+        }
+        i()
+        {
+            this.a = 1;
+            this.b = 0;
+            this.c = 0;
+            this.d = 1;
+            this.tx = 0;
+            this.ty = 0;
+        }
+        t(x,y)
+        {
+            this.tx += x;
+            this.ty += y;
+        }
+        r(r)
+        {
+            var c = Maths.cos[r];
+            var s = Maths.sin[r];
+            this.a *= c;
+            this.b *= -s;
+            this.c *= c;
+            this.d *= s;
+
+        }
+        s(x,y)
+        {
+            this.a *= x;
+            this.b *= x;
+            this.c *= y;
+            this.d *= y;
+        }
+
+    }
+    badyoo.Matrix = Matrix;
 
     class Maths
     {
@@ -636,6 +685,16 @@
         }
     }
     badyoo.Image = Image;
+    
+    class Lable extends GameObject
+    {
+
+    }
+
+    class Background extends GameObject
+    {
+
+    }
 
     badyoo.current = new badyoo.BYGL();
     badyoo.init = function(w,h,ac = true,c = null)
