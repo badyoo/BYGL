@@ -41,23 +41,24 @@
 
         uploadUniform1f(index,a)
         {
-            if( this["u_"+index] ) badyoo.current.gl.uniform2f(this["u_"+index],a);
+            if( this["u_"+index] ) badyoo.current.gl.uniform1f(this["u_"+index],a);
         }
 
     }
-
     class BYGL
     {
         constructor()
         {
             this.debug = true;
-            this.displayList = [];
+            this.root = null;
             this.randerList = [];
             this.G_a = this.G_r = this.G_g = this.G_b = 0;
             this.G_m = new Matrix();
         }        
-        init(width,height,alignC,canvas)
+        init(width,height,root,alignC,canvas)
         {
+            if( root == null ) this.root = new Layer();
+            else this.root = new root();
             var self = this; 
             self.window = window;
             self.canvas = canvas;
@@ -150,7 +151,7 @@
                 self.time = t;
                 self.update();
                 w.requestAnimationFrame(update);
-                console.log(self.batch);
+                //console.log(self.batch);
             }
         }
 
@@ -226,106 +227,144 @@
 
         update()
         {
-            this.resetRender();
+            var self = this;
+            self.resetRender();
             //清除画布
-            this.gl.clearColor(this.G_r, this.G_g, this.G_b, this.G_a);
-            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-            this.transform(this.displayList);
-            this.randerList.push([this.drawNum,this.drawStart,this.G_texture,this.G_NBlendMode,this.G_alpha]);
-            this.drawNum = 0;
+            self.gl.clearColor(self.G_r, self.G_g, self.G_b, self.G_a);
+            self.gl.clear(self.gl.COLOR_BUFFER_BIT);
+
+           // var t = Date.now();
+            self.transform(self.root,self.root.alpha,self.root.matrix);
+            //console.log( Date.now()-t);
+            self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
+            self.drawNum = 0;
             //顶点缓冲区
-            var positionBuffer = this.positionBuffer;
-            if( positionBuffer == null ) this.positionBuffer = positionBuffer = this.gl.createBuffer();
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer)
-            this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(this.posionList),this.gl.STATIC_DRAW);
+            var positionBuffer = self.positionBuffer;
+            if( positionBuffer == null ) self.positionBuffer = positionBuffer = self.gl.createBuffer();
+            self.gl.bindBuffer(self.gl.ARRAY_BUFFER, positionBuffer)
+            self.gl.bufferData(self.gl.ARRAY_BUFFER,new Float32Array(self.posionList),self.gl.STATIC_DRAW);
        
-             for( var i = 0;i<this.randerList.length;i++ )
+             for( var i = 0;i<self.randerList.length;i++ )
             {
-                this.render(this.randerList[i]);
+                self.render(self.randerList[i]);
             }
             
         }
 
-        transform(list)
+        transform(layer,alpha,matrix)
         {
             var self = this;
             var arr = self.posionList || (self.posionList = []);
-            var len = list.length;
-            self.index = 0;
+            var list = layer.displayList;
+            var len = layer.displayNum;
+            var alpha = layer.alpha * alpha;
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
-                gameObect.rotation +=1;
-                if( gameObect.m_texture && gameObect.visible && gameObect.alpha !== 0 )
+                gameObect.rotation++;
+                var oA = gameObect.alpha * alpha;
+                var tempMatrix = gameObect.matrix;
+                if( gameObect.rotation == 0 )
                 {
-                    if( (self.G_texture != null && self.G_texture != gameObect.m_texture.tex )
-                        || (  self.G_blendMode != null && gameObect.blendMode != self.G_blendMode )
-                        || ( gameObect.alpha != self.G_alpha ))
+                    tempMatrix.set(
+						gameObect.scaleX, 0.0, 0.0, gameObect.scaleY, 
+						gameObect.x -  gameObect.scaleX, gameObect.y -  gameObect.scaleY
+					);
+                }
+                else
+                {
+                    var r = 360 - gameObect.rotation;
+                    var cos = Maths.cos[r];
+                    var sin = Maths.sin[r];
+					tempMatrix.a = gameObect.scaleX *  cos;
+					tempMatrix.b = gameObect.scaleX *  -sin;
+					tempMatrix.c = gameObect.scaleY *  sin;
+					tempMatrix.d = gameObect.scaleY *  cos;
+					tempMatrix.tx = gameObect.x - tempMatrix.a - tempMatrix.c;
+					tempMatrix.ty = gameObect.y - tempMatrix.b - tempMatrix.d;
+                }
+
+                var childMatrix = Pool.get(Matrix);
+
+                childMatrix.set(
+					matrix.a * tempMatrix.a + matrix.c * tempMatrix.b,
+					matrix.b * tempMatrix.a + matrix.d * tempMatrix.b,
+					matrix.a * tempMatrix.c + matrix.c * tempMatrix.d,
+					matrix.b * tempMatrix.c + matrix.d * tempMatrix.d,
+					matrix.tx + matrix.a * tempMatrix.tx + matrix.c * tempMatrix.ty,
+					matrix.ty + matrix.b * tempMatrix.tx + matrix.d * tempMatrix.ty
+				);
+
+                if( gameObect.visible && oA !== 0 )
+                {
+                    if( gameObect.displayList )
                     {
-                        self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
-                        self.drawStart = i*12;//原先是*6，但是显示异常，多间隔一个矩形，显示就不会异常了，不知道为什么~
-                        self.drawNum = 0;
+                        self.transform(gameObect,oA,childMatrix);
                     }
-
-                    self.G_texture = gameObect.m_texture.tex;
-                    self.G_NBlendMode = gameObect.blendMode;
-                    self.G_alpha = gameObect.alpha;
-
-                    var w = gameObect.width;
-                    var h = gameObect.height;
-                    var tx = gameObect.x;
-                    var ty = gameObect.y;
-
-                    var a = gameObect.scaleX * w;
-                    var b = 0;
-                    var c = 0;
-                    var d = gameObect.scaleY * h;
-
-                    var r = gameObect.rotation;
-                    if( r != 0 )
+                    else
                     {
-                        r =  360 - r;
-                        var cos = Maths.cos[r];
-                        var sin = Maths.sin[r];
-                        a =  gameObect.scaleX * cos  * w;
-                        b =  gameObect.scaleX * -sin * w;
-                        c =  gameObect.scaleY * sin  * h;
-                        d =  gameObect.scaleY * cos  * h;
+                        if( gameObect.m_texture )
+                        {
+                            if( (self.G_texture != null && self.G_texture != gameObect.m_texture.tex )
+                                || (  self.G_blendMode != null && gameObect.blendMode != self.G_blendMode )
+                                || ( oA != self.G_alpha ))
+                            {
+                                self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
+                                self.drawStart = i*12;//原先是*6，但是显示异常，多间隔一个矩形，显示就不会异常了，不知道为什么~
+                                self.drawNum = 0;
+                            }
+
+                            self.G_texture = gameObect.m_texture.tex;
+                            self.G_NBlendMode = gameObect.blendMode;
+                            self.G_alpha = oA;
+
+                            var w = gameObect.width;
+                            var h = gameObect.height;
+                            var tx = childMatrix.tx;
+                            var ty = childMatrix.ty;
+
+                            var wa = childMatrix.a * w;
+                            var wb = childMatrix.b * w;
+                            var hc = childMatrix.c * h;
+                            var hd = childMatrix.d * h;
+
+                            arr[this.index++] = tx;
+                            arr[this.index++] = ty;
+                            arr[this.index++] = 0;
+                            arr[this.index++] = 0;
+
+                            arr[this.index++] = tx+wa;
+                            arr[this.index++] = ty+wb;
+                            arr[this.index++] = 1;
+                            arr[this.index++] = 0;
+
+                            arr[this.index++] = tx+hc;
+                            arr[this.index++] = ty+hd;
+                            arr[this.index++] = 0;
+                            arr[this.index++] = 1;
+
+                            arr[this.index++] = tx+wa+hc;
+                            arr[this.index++] = ty+wb+hd;
+                            arr[this.index++] = 1;
+                            arr[this.index++] = 1;
+                            this.drawNum+=6;
+                        }
                     }
-
-                    arr[this.index++] = tx;
-                    arr[this.index++] = ty;
-                    arr[this.index++] = 0;
-                    arr[this.index++] = 0;
-
-                    arr[this.index++] = tx+a;
-                    arr[this.index++] = ty+b;
-                    arr[this.index++] = 1;
-                    arr[this.index++] = 0;
-
-                    arr[this.index++] = tx+c;
-                    arr[this.index++] = ty+d;
-                    arr[this.index++] = 0;
-                    arr[this.index++] = 1;
-
-                    arr[this.index++] = tx+a+c;
-                    arr[this.index++] = ty+b+d;
-                    arr[this.index++] = 1;
-                    arr[this.index++] = 1;
-                    this.drawNum+=6;
                 }
             }
         }
 
         resetRender()
         {
-            this.randerList.length = 0;
-            this.G_texture = null;
-            this.G_program = null;
-            this.G_alpha = 1;
-            this.batch = 0;
-            this.drawNum = 0;
-            this.drawStart = 0;
+            var self = this;
+            self.randerList.length = 0;
+            self.G_texture = null;
+            self.G_program = null;
+            self.G_alpha = 1;
+            self.batch = 0;
+            self.drawNum = 0;
+            self.drawStart = 0;
+            self.index = 0;
         }
 
         render(arr)
@@ -361,6 +400,10 @@
 
     class Matrix
     {
+        constructor()
+        {
+            this.i();
+        }
         set(a = 1, b = 0,c = 0,d = 1,tx = 0,ty = 0)
         {
             this.a = a;//x1
@@ -390,9 +433,8 @@
             var s = Maths.sin[r];
             this.a *= c;
             this.b *= -s;
-            this.c *= c;
-            this.d *= s;
-
+            this.c *= s;
+            this.d *= c;
         }
         s(x,y)
         {
@@ -400,6 +442,7 @@
             this.b *= x;
             this.c *= y;
             this.d *= y;
+            
         }
 
     }
@@ -517,8 +560,56 @@
             this.visible = true;
             this.rotation = 0;
             this.blendMode = BlendMode.NORMAL;
-            badyoo.current.displayList.push(this);
+            this.parent = null;
+            this.matrix = Pool.get(Matrix);
         }
+
+        set pivotX(v)
+        {
+            this.m_pivotX = v;
+        }
+        get pivotX()
+        {
+            return this.m_pivotX;
+        }
+
+        set rotation(v)
+        {
+            this.m_rotation = v;
+        }
+        get rotation()
+        {
+            return this.m_rotation;
+        }
+        
+        changeMatrix()
+        {
+            // if( layer.rotation == 0 )
+            // {
+            //     matrix.set(
+            //         layer.scaleX, 0.0, 0.0, layer.scaleY, 
+            //         layer.x - layer.pivotX * layer.scaleX, layer.y - layer.pivotY * layer.scaleY
+            //     );
+            // }
+            // else
+            // {
+            //     var r = 360 - layer.rotation;
+            //     var cos = Maths.cos[r];
+            //     var sin = Maths.sin[r];
+            //     matrix.a = layer.scaleX *  cos;
+            //     matrix.b = layer.scaleX *  -sin;
+            //     matrix.c = layer.scaleY *  sin;
+            //     matrix.d = layer.scaleY *  cos;
+            //     matrix.tx = layer.x - layer.pivotX * matrix.a - layer.pivotY * matrix.c;
+            //     matrix.ty = layer.y - layer.pivotX * matrix.b - layer.pivotY * matrix.d;
+            // }
+        }
+
+        move(x,y)
+		{
+			this.x = x;
+			this.y = y;
+		}
         free(){}
     }
     badyoo.GameObject = GameObject;
@@ -630,6 +721,128 @@
     }
     badyoo.Texture = Texture;
 
+    class Layer extends GameObject
+    {
+        constructor()
+        {
+            super();
+            this.displayList = [];
+            this.displayNum = 0;
+        }
+
+        Instantiate(cla)
+        {
+            var o = new cla;
+            if( o instanceof GameObject )
+            {
+                this.addChild(o);
+            }
+            return o;
+        }
+
+        get numChildren()
+        {
+            return this.displayNum;
+        }
+
+        contains(o)
+		{
+			return displayList.indexOf( o ) != -1;
+		}
+
+        addChild(o)
+        {
+            this.addChildAt(o,this.displayNum);
+        }
+        
+        addChildAt(o,index)
+		{
+            if ( index >= 0 && index <= this.displayNum )
+			{
+				if ( o.parent == this )
+				{
+					this.setChildIndex(o,index); 
+				}
+				else
+				{
+					if ( index == this.displayNum ) 
+					{
+						this.displayList[this.displayNum++] = o;
+					}
+					else     
+					{
+						this.displayList.splice(index, 0, o);
+					}
+				}
+				o.parent = this;
+            }
+            else
+            {
+                throw new RangeError("Invalid child index");
+            }
+        }
+
+        removeChild(o)
+        {
+            var index = this.displayList.indexOf(o);
+            if(index != -1) 
+            {
+                this.displayList.splice(i,1)
+                this.displayNum--;
+                o.parent = null;
+            }
+        }
+
+        removeChildAt(index)
+        {
+            if( index >= 0 && index < this.displayNum )
+			{
+                var o = this.displayList[index]
+                this.displayList.splice(index,1)
+                this.displayNum--;
+                o.parent = null;
+            }
+        }
+
+        removeAllChild(beginIndex=0, endIndex=-1)
+        {
+            if ( endIndex < 0 || endIndex >= this.displayNum ) endIndex = this.displayNum - 1;
+            for ( var i = beginIndex; i <= endIndex; i++  )this.removeChildAt(beginIndex);
+        }
+
+        getChildAt( index )
+		{
+            if ( index >= 0 && index < this.displayNum )
+				return this.displayList[index];
+			else
+				throw new Error("Invalid child index");
+        }
+
+        getChildByName(name)
+		{
+			for ( var i=0; i<this.displayNum; i++ )
+				if ( this.displayList[i].name == name ) return this.displayList[i];
+			
+			return null;
+		}
+
+        getChildIndex(o)
+        {
+           return this.displayList.indexOf(o);
+        }
+
+        setChildIndex(o,index)
+        {
+            var oldIndex = this.displayList.indexOf(o);
+			if ( oldIndex == index ) return;
+			if ( oldIndex == -1 ) throw new Error("Not a child of this layer");
+			this.displayList.splice( oldIndex, 1 );
+			this.displayList.splice( index, 0, o );
+
+        }
+    }
+    badyoo.Layer = Layer;
+
     class Image extends GameObject
     {
         constructor()
@@ -664,9 +877,7 @@
 
         get width()
         {
-            if( this.m_width ) return this.m_width;
-            else if( this.m_texture ) return this.m_texture.width;
-            return 0;
+            return this.m_width || (this.m_texture && this.m_texture.width);
         }
         set width(v)
         {
@@ -675,9 +886,7 @@
 
         get height()
         {
-            if( this.m_height ) return this.m_height;
-            else if( this.m_texture ) return this.m_texture.height;
-            return 0;
+            return this.m_height || (this.m_texture && this.m_texture.height);
         }
         set height(v)
         {
@@ -697,9 +906,9 @@
     }
 
     badyoo.current = new badyoo.BYGL();
-    badyoo.init = function(w,h,ac = true,c = null)
+    badyoo.init = function(w,h,ac = true,c = null,r = null)
     {
-        badyoo.current.init(w,h,ac,c);
+        badyoo.current.init(w,h,r,ac,c);
     };
     badyoo.bgColor = function( color )
     {
@@ -707,6 +916,15 @@
         badyoo.current.G_r = ((color >> 16) & 0xff) / 255.0;
         badyoo.current.G_g = ((color >> 8) & 0xff) / 255.0;
         badyoo.current.G_b = (color & 0xff) / 255.0;
+    }
+    badyoo.Instantiate = function(cla)
+    {
+        var o = new cla;
+        if( o instanceof GameObject )
+        {
+            badyoo.current.root.addChild(o);
+        }
+        return o;
     }
 
 }(window));
