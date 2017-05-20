@@ -3,6 +3,11 @@
     'use strict';
     var badyoo = {};
     window.badyoo = badyoo;
+    badyoo.registerClass = function(cla)
+    {
+        cla.__class = cla.name;
+        badyoo[cla.__class] = cla;
+    }
 
     class Shader
     {
@@ -351,6 +356,8 @@
                         }
                     }
                 }
+
+                Pool.set(Matrix,childMatrix);
             }
         }
 
@@ -396,7 +403,7 @@
             self.batch ++;
         }
     }
-    badyoo.BYGL = BYGL;
+    badyoo.registerClass(BYGL);
 
     class Matrix
     {
@@ -446,7 +453,7 @@
         }
 
     }
-    badyoo.Matrix = Matrix;
+    badyoo.registerClass(Matrix);
 
     class Maths
     {
@@ -458,26 +465,29 @@
     Maths.cos ={};
     Maths.sin ={};
 
-    badyoo.Math = Maths;
+    badyoo.registerClass(Maths);
 
     class Pool
     {
-        static get(_clas)
+        static get(cla)
         {
-            var arr = Pool[_clas] || (Pool[_clas] = []);
-            var obj = Pool[_clas].shift();
-            if( obj == null ) return new _clas();
+            var key = cla.__class;
+            var arr = Pool[key] || (Pool[key] = []);
+            var obj = Pool[key].shift();
+            if( obj == null ) return new cla();
             return obj;
         }
 
-        static set(_clas,obj)
+        static set(cla,obj)
         {
-            var arr = Pool[_clas] || (Pool[_clas] = []);
+            var key = cla.__class;
+            var arr = Pool[key] || (Pool[key] = []);
             arr.push(obj);
         }
     }
     Pool.dr = {};
-    badyoo.Pool = Pool;
+    badyoo.registerClass(Pool);
+
 
     class Handler
     {
@@ -507,7 +517,8 @@
             return h;
         }
     }
-    badyoo.Handler = Handler;
+    badyoo.registerClass(Handler);
+
 
     class BlendMode
     {
@@ -542,7 +553,8 @@
     BlendMode.MULTIPLY = 3;
     BlendMode.SCREEN = 4;
     BlendMode.ERASE = 5;
-    badyoo.BlendMode = BlendMode;
+    badyoo.registerClass(BlendMode);
+
 
     class GameObject
     {
@@ -612,7 +624,8 @@
 		}
         free(){}
     }
-    badyoo.GameObject = GameObject;
+    badyoo.registerClass(GameObject);
+
 
     class Loader
     {
@@ -706,7 +719,8 @@
     }
     Loader.pool = {};
     Loader.assets = {};
-    badyoo.Loader = Loader;
+    badyoo.registerClass(Loader);
+
 
     class Texture
     {
@@ -719,7 +733,8 @@
             this.tex = badyoo.current.uploadTexture(data);
         }
     }
-    badyoo.Texture = Texture;
+    badyoo.registerClass(Texture);
+
 
     class Layer extends GameObject
     {
@@ -841,7 +856,8 @@
 
         }
     }
-    badyoo.Layer = Layer;
+    badyoo.registerClass(Layer);
+
 
     class Image extends GameObject
     {
@@ -893,17 +909,22 @@
             this.m_height = v;
         }
     }
-    badyoo.Image = Image;
+    badyoo.registerClass(Image);
+
     
     class Lable extends GameObject
     {
 
     }
+    badyoo.registerClass(Lable);
+
 
     class Background extends GameObject
     {
 
     }
+    badyoo.registerClass(Background);
+
 
     badyoo.current = new badyoo.BYGL();
     badyoo.init = function(w,h,ac = true,c = null,r = null)
@@ -926,5 +947,6 @@
         }
         return o;
     }
+
 
 }(window));
