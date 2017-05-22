@@ -2,11 +2,11 @@
 {
     'use strict';
     var badyoo = {};
-    window.badyoo = badyoo;
-    badyoo.registerClass = function(cla)
+    window["badyoo"] = badyoo;
+    badyoo.registerClass = function(cla,name)
     {
-        cla.__class = cla.name;
-        badyoo[cla.__class] = cla;
+        cla.__class = name;
+        badyoo[name] = cla;
     }
 
     class Shader
@@ -62,9 +62,9 @@
         }        
         init(width,height,root,alignC,canvas)
         {
-            if( root == null ) this.root = new Layer();
-            else this.root = new root();
-            var self = this; 
+            var self = this;
+            if( root == null ) self.root = new Layer();
+            else self.root = new root();
             self.window = window;
             self.canvas = canvas;
             self.alignC = alignC;
@@ -103,7 +103,7 @@
             varying vec2 v_texCoord;
             void main() {
                 v_texCoord = a_position.zw;
-                vec2 temp = a_position.xy/u_re * 2.0 `+(self.alignC == false ? "- 1.0;":";")+
+                vec2 temp = a_position.xy * u_re`+ (self.alignC == false ? "-1.0;" :";")+
             `
                 gl_Position = vec4(temp.x,-temp.y,0,1);
             }`;
@@ -130,16 +130,19 @@
             shader.AttriUniformLocation("u_re");
             shader.AttriUniformLocation("u_alpha");
             shader.bind();
-            shader.uploadUniform2f(0,self.gl.canvas.width,self.gl.canvas.height);
-            this.spriteAProgram = shader;
+
+            var px = 2/self.gl.canvas.width;
+            var py = 2/self.gl.canvas.height;
+            shader.uploadUniform2f(0,px,py);
+            self.spriteAProgram = shader;
             var shader = new Shader(vs,fs);
             shader.AttribLocation("a_position");
             shader.AttriUniformLocation("u_re");
             shader.bind();
-            shader.uploadUniform2f(0,self.gl.canvas.width,self.gl.canvas.height);
-            this.spriteProgram = shader;
-            this.indexBuffer = this.createIndexBuffer(65536/4);
-            for( var i = -720;i<=720;i++ )
+            shader.uploadUniform2f(0,px,py);
+            self.spriteProgram = shader;
+            self.indexBuffer = self.createIndexBuffer(65536/4);
+            for( var i = 0;i<=360;i++ )
             {
                 var a = i * Math.PI / 180;
                 Maths.sin[i] = Math.sin(a);
@@ -152,7 +155,7 @@
             function update(v)
             {
                 var t = Date.now();
-                //console.log( t -self.time);
+                console.log( t -self.time);
                 self.time = t;
                 self.update();
                 w.requestAnimationFrame(update);
@@ -162,9 +165,9 @@
 
         createIndexBuffer(num)
         {
+            var self = this;
             //Indexbuffer webgl1.0 只支持16位uint
             if( num  > 16384 ) num = 16384;
-            var self = this;
             var buffer = new ArrayBuffer(num  * 2 * 6);
             var uint16Array = new Uint16Array(buffer);
             for( var i = 0;i<num;i++ )
@@ -266,40 +269,19 @@
             for( var i = 0;i<len;i++ )
             {
                 var gameObect = list[i];
-                gameObect.rotation++;
                 var oA = gameObect.alpha * alpha;
                 var tempMatrix = gameObect.matrix;
-                if( gameObect.rotation == 0 )
-                {
-                    tempMatrix.set(
-						gameObect.scaleX, 0.0, 0.0, gameObect.scaleY, 
-						gameObect.x -  gameObect.scaleX, gameObect.y -  gameObect.scaleY
-					);
-                }
-                else
-                {
-                    var r = 360 - gameObect.rotation;
-                    var cos = Maths.cos[r];
-                    var sin = Maths.sin[r];
-					tempMatrix.a = gameObect.scaleX *  cos;
-					tempMatrix.b = gameObect.scaleX *  -sin;
-					tempMatrix.c = gameObect.scaleY *  sin;
-					tempMatrix.d = gameObect.scaleY *  cos;
-					tempMatrix.tx = gameObect.x - tempMatrix.a - tempMatrix.c;
-					tempMatrix.ty = gameObect.y - tempMatrix.b - tempMatrix.d;
-                }
-
+                var x = gameObect.x - tempMatrix.tx;
+                var y = gameObect.y - tempMatrix.ty;
                 var childMatrix = Pool.get(Matrix);
-
                 childMatrix.set(
 					matrix.a * tempMatrix.a + matrix.c * tempMatrix.b,
 					matrix.b * tempMatrix.a + matrix.d * tempMatrix.b,
 					matrix.a * tempMatrix.c + matrix.c * tempMatrix.d,
 					matrix.b * tempMatrix.c + matrix.d * tempMatrix.d,
-					matrix.tx + matrix.a * tempMatrix.tx + matrix.c * tempMatrix.ty,
-					matrix.ty + matrix.b * tempMatrix.tx + matrix.d * tempMatrix.ty
+					matrix.tx + matrix.a * x + matrix.c * y,
+					matrix.ty + matrix.b * x + matrix.d * y
 				);
-
                 if( gameObect.visible && oA !== 0 )
                 {
                     if( gameObect.displayList )
@@ -403,7 +385,7 @@
             self.batch ++;
         }
     }
-    badyoo.registerClass(BYGL);
+    badyoo.registerClass(BYGL,"BYGL");
 
     class Matrix
     {
@@ -449,11 +431,12 @@
             this.b *= x;
             this.c *= y;
             this.d *= y;
-            
+            this.tx *= x;
+            this.ty *= y;
         }
 
     }
-    badyoo.registerClass(Matrix);
+    badyoo.registerClass(Matrix,"Matrix");
 
     class Maths
     {
@@ -465,7 +448,7 @@
     Maths.cos ={};
     Maths.sin ={};
 
-    badyoo.registerClass(Maths);
+    badyoo.registerClass(Maths,"Maths");
 
     class Pool
     {
@@ -486,8 +469,7 @@
         }
     }
     Pool.dr = {};
-    badyoo.registerClass(Pool);
-
+    badyoo.registerClass(Pool,"Pool");
 
     class Handler
     {
@@ -517,8 +499,7 @@
             return h;
         }
     }
-    badyoo.registerClass(Handler);
-
+    badyoo.registerClass(Handler,"Handler");
 
     class BlendMode
     {
@@ -553,8 +534,7 @@
     BlendMode.MULTIPLY = 3;
     BlendMode.SCREEN = 4;
     BlendMode.ERASE = 5;
-    badyoo.registerClass(BlendMode);
-
+    badyoo.registerClass(BlendMode,"BlendMode");
 
     class GameObject
     {
@@ -562,59 +542,93 @@
         {
             this.x = 0;
             this.y = 0;
-            this.pivotX = 0;
-            this.pivotY = 0;
             this.width = 0;
             this.height = 0;
             this.alpha = 1;
-            this.scaleX = 1;
-            this.scaleY = 1;
+            this.m_pivotX = 0;
+            this.m_pivotY = 0;
+            this.m_rotation = 0;
+            this.m_scaleX = 1;
+            this.m_scaleY = 1;
             this.visible = true;
-            this.rotation = 0;
             this.blendMode = BlendMode.NORMAL;
             this.parent = null;
             this.matrix = Pool.get(Matrix);
         }
 
-        set pivotX(v)
+        pivot(x,y)
         {
-            this.m_pivotX = v;
+            if( this.m_pivotX != x || this.m_pivotY != y  )
+            {
+                this.m_pivotX = x;
+                this.m_pivotY = y;
+                this.updateMatrix();
+            }
         }
-        get pivotX()
+        getPivotX()
         {
             return this.m_pivotX;
+        }
+        getPivotY()
+        {
+            return this.m_pivotY;
+        }
+
+        scale(x,y)
+        {
+            if( this.m_scaleX != x || this.m_scaleY != y  )
+            {
+                this.m_scaleX = x;
+                this.m_scaleY = y;
+                this.updateMatrix();
+            }
+        }
+        getScaleX()
+        {
+            return this.m_scaleX;
+        }
+        getScaleY()
+        {
+            return this.m_scaleY;
         }
 
         set rotation(v)
         {
-            this.m_rotation = v;
+            if( this.m_rotation != v )
+            {
+                this.m_rotation = v;
+                this.updateMatrix();
+            }
         }
         get rotation()
         {
             return this.m_rotation;
         }
-        
-        changeMatrix()
+
+        updateMatrix()
         {
-            // if( layer.rotation == 0 )
-            // {
-            //     matrix.set(
-            //         layer.scaleX, 0.0, 0.0, layer.scaleY, 
-            //         layer.x - layer.pivotX * layer.scaleX, layer.y - layer.pivotY * layer.scaleY
-            //     );
-            // }
-            // else
-            // {
-            //     var r = 360 - layer.rotation;
-            //     var cos = Maths.cos[r];
-            //     var sin = Maths.sin[r];
-            //     matrix.a = layer.scaleX *  cos;
-            //     matrix.b = layer.scaleX *  -sin;
-            //     matrix.c = layer.scaleY *  sin;
-            //     matrix.d = layer.scaleY *  cos;
-            //     matrix.tx = layer.x - layer.pivotX * matrix.a - layer.pivotY * matrix.c;
-            //     matrix.ty = layer.y - layer.pivotX * matrix.b - layer.pivotY * matrix.d;
-            // }
+            var r = this.m_rotation;
+            if( r == 0 )
+            {
+                this.matrix.set(
+                    this.m_scaleX, 0.0, 0.0, this.m_scaleY, 
+                    this.m_scaleX * this.m_pivotX,this.m_scaleY* this.m_pivotY
+                );
+            }
+            else
+            {
+                r =  (360 - r) % 360;
+                if( r < 0 ) r += 360;
+
+                var cos = Maths.cos[r];
+                var sin = Maths.sin[r];
+                this.matrix.a = this.m_scaleX *  cos;
+                this.matrix.b = this.m_scaleX *  -sin;
+                this.matrix.c = this.m_scaleY *  sin;
+                this.matrix.d = this.m_scaleY *  cos;
+                this.matrix.tx = this.m_pivotX * this.matrix.a - this.m_pivotY * this.matrix.c;
+                this.matrix.ty = this.m_pivotX * this.matrix.b - this.m_pivotY * this.matrix.d;
+            }
         }
 
         move(x,y)
@@ -624,8 +638,7 @@
 		}
         free(){}
     }
-    badyoo.registerClass(GameObject);
-
+    badyoo.registerClass(GameObject,"GameObject");
 
     class Loader
     {
@@ -719,8 +732,7 @@
     }
     Loader.pool = {};
     Loader.assets = {};
-    badyoo.registerClass(Loader);
-
+    badyoo.registerClass(Loader,"Loader");
 
     class Texture
     {
@@ -733,8 +745,7 @@
             this.tex = badyoo.current.uploadTexture(data);
         }
     }
-    badyoo.registerClass(Texture);
-
+    badyoo.registerClass(Texture,"Texture");
 
     class Layer extends GameObject
     {
@@ -762,7 +773,7 @@
 
         contains(o)
 		{
-			return displayList.indexOf( o ) != -1;
+			return this.displayList.indexOf( o ) != -1;
 		}
 
         addChild(o)
@@ -802,7 +813,7 @@
             var index = this.displayList.indexOf(o);
             if(index != -1) 
             {
-                this.displayList.splice(i,1)
+                this.displayList.splice(index,1)
                 this.displayNum--;
                 o.parent = null;
             }
@@ -856,8 +867,7 @@
 
         }
     }
-    badyoo.registerClass(Layer);
-
+    badyoo.registerClass(Layer,"Layer");
 
     class Image extends GameObject
     {
@@ -909,41 +919,38 @@
             this.m_height = v;
         }
     }
-    badyoo.registerClass(Image);
+    badyoo.registerClass(Image,"Image");
 
-    
     class Lable extends GameObject
     {
 
     }
-    badyoo.registerClass(Lable);
-
+    badyoo.registerClass(Lable,"Lable");
 
     class Background extends GameObject
     {
 
     }
-    badyoo.registerClass(Background);
+    badyoo.registerClass(Background,"Background");
 
-
-    badyoo.current = new badyoo.BYGL();
-    badyoo.init = function(w,h,ac = true,c = null,r = null)
+    badyoo.current = new badyoo["BYGL"]();
+    badyoo["init"] = function(w,h,ac = true,c = null,r = null)
     {
         badyoo.current.init(w,h,r,ac,c);
     };
-    badyoo.bgColor = function( color )
+    badyoo["bgColor"] = function( color )
     {
         badyoo.current.G_a = ((color >> 24) & 0xff) / 255.0;
         badyoo.current.G_r = ((color >> 16) & 0xff) / 255.0;
         badyoo.current.G_g = ((color >> 8) & 0xff) / 255.0;
         badyoo.current.G_b = (color & 0xff) / 255.0;
     }
-    badyoo.Instantiate = function(cla)
+    badyoo["Instantiate"] = function(cla)
     {
         var o = new cla;
         if( o instanceof GameObject )
         {
-            badyoo.current.root.addChild(o);
+            badyoo.current.root["addChild"](o);
         }
         return o;
     }
