@@ -235,6 +235,7 @@
 
         update()
         {
+            Loop.m_loop();
             var self = this;
             self.resetRender();
             //清除画布
@@ -500,6 +501,116 @@
         }
     }
     badyoo.registerClass(Handler,"Handler");
+
+    class LoopData
+    {
+        constructor()
+        {
+            this.arr = [];
+            this.num = 0;
+        }
+        free()
+        {
+            delete Loop.updateDir[this.pointer.BadyooLoopIdx];
+            this.pointer.BadyooLoopIdx = null;
+            this.pointer = null;
+            this.num = 0;
+            this.arr.length = 0;
+            Pool.set(LoopData,this);
+        }
+    }
+    badyoo.registerClass(LoopData,"LoopData");
+    class Loop
+    {
+        static update(pointer,callback)
+        {
+            var id = pointer.BadyooLoopIdx;
+            var loopData;
+            if( id == null  )
+            {
+                loopData = Pool.get(LoopData);
+                loopData.pointer = pointer;
+                pointer.BadyooLoopIdx = Loop.loopIdx++;
+                Loop.updateDir[pointer.BadyooLoopIdx] = Loop.updateList[Loop.updateNum] = loopData;
+                Loop.updateNum++;
+            } 
+            loopData = Loop.updateDir[pointer.BadyooLoopIdx];
+            if( loopData.arr.indexOf(callback) == -1 )
+            {
+                loopData.arr.push(callback);
+                loopData.num ++;
+            } 
+        }
+
+        static m_loop()
+        {
+            for( var i = 0;i<Loop.updateNum;i++ )
+            { 
+                var loopData = Loop.updateList[i];
+                var len = loopData.arr.length;
+                if( loopData.num == 0 )
+                {
+                    loopData.free();
+                    Loop.updateList.splice(i,1);
+                    Loop.updateNum--;
+                    i--
+
+                    continue;
+                }
+
+                for( var j = 0;j<len;j++ )
+                {
+                    if( loopData.arr[j] == 0 )
+                    {
+                        loopData.arr.splice(j,1);
+                        len--;
+                        j--;
+                    }
+                    else
+                    {
+                        loopData.arr[j].call(loopData.pointer);
+                    }
+                }
+            }
+        }
+
+        static clearUpdate(pointer,callback)
+        {
+            var id = pointer.BadyooLoopIdx;
+            if( id != null  )
+            {
+                var loopData = Loop.updateDir[pointer.BadyooLoopIdx];
+                var removeIndex = loopData.arr.indexOf(callback);
+                if( removeIndex != -1 )
+                {
+                    loopData.arr.splice(removeIndex,1,0);
+                    loopData.num--;
+                }
+            }
+        }
+
+        static clearAll(pointer)
+        {
+            var id = pointer.BadyooLoopIdx;
+            if( id != null  )
+            {
+                var loopData = Loop.updateDir[pointer.BadyooLoopIdx];
+                var removeIndex = Loop.updateList.indexOf(loopData);
+                if( removeIndex != -1 )
+                {
+                    loopData.free();
+                    Loop.updateList.splice(removeIndex,1);
+                    Loop.updateNum--;
+                }
+               
+            }
+        }
+    }
+    Loop.loopIdx = 0;
+    Loop.updateList = [];
+    Loop.updateDir = {};
+    Loop.updateNum = 0;
+    badyoo.registerClass(Loop,"Loop");
 
     class BlendMode
     {
