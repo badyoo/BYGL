@@ -1,5 +1,3 @@
-(function(window)
-{
     'use strict';
     var badyoo = {};
     window["badyoo"] = badyoo;
@@ -57,6 +55,7 @@
             this.debug = true;
             this.root = null;
             this.randerList = [];
+            this.tList = [];
             this.G_a = this.G_r = this.G_g = this.G_b = 0;
             this.G_m = new Matrix();
         }        
@@ -112,7 +111,11 @@
             varying vec2 v_texCoord;
             uniform sampler2D u_texture;
             void main(){
+                //vec4 temp = texture2D(u_texture, v_texCoord);
+                //float l = 0.299*temp.r+0.587*temp.g+0.114*temp.b;
+                //gl_FragColor = vec4(l,l,l,temp.a);
                 gl_FragColor = texture2D(u_texture, v_texCoord);
+                
             }`
             ;
             var fsA = `
@@ -141,7 +144,9 @@
             shader.bind();
             shader.uploadUniform2f(0,px,py);
             self.spriteProgram = shader;
-            self.indexBuffer = self.createIndexBuffer(65536/4);
+            var quadNum = 16384;
+            self.indexBuffer = self.createIndexBuffer(quadNum);
+            self.posionList = new Float32Array(new ArrayBuffer(quadNum*4*16));
             for( var i = 0;i<=360;i++ )
             {
                 var a = i * Math.PI / 180;
@@ -155,12 +160,29 @@
             function update(v)
             {
                 var t = Date.now();
-                console.log( t -self.time);
+                //console.log( t -self.time);
                 self.time = t;
                 self.update();
                 w.requestAnimationFrame(update);
                 //console.log(self.batch);
             }
+
+            self.canvas.addEventListener('mousedown',mouse);
+            self.canvas.addEventListener('mouseup',mouse);
+            self.canvas.addEventListener('mouseout',mouse)
+            self.canvas.addEventListener('mousemove',mouse);
+            self.tListType = {
+                "mousedown":"onTouchDown",
+                "mouseup":"onTouchUp",
+                "mouseout":"onTouchOut",
+                "mousemove":"onTouchMove"
+            };
+
+            function mouse(e)
+            {
+                self.tList.push(e);
+            }
+
         }
 
         createIndexBuffer(num)
@@ -233,10 +255,67 @@
             return texture;
         }
 
+        onTouch()
+        {
+            var len = this.tList.length;
+            for( var i = 0;i<len;i++ )
+            {
+                var e = this.tList[i];
+                var touchID = e.identifier || 0;
+                var touchX = e.pageX || e.clientX;
+                var touchY = e.pageY || e.clientY;
+
+                if( this.alignC ) touchX -= this.width>>1,touchY -= this.height>>1;
+                    
+                this.touchEvent(this.root,touchX,touchY,touchID,this.tListType[e.type]);
+            }
+
+            this.tList.length = 0;
+            
+        }
+
+        touchEvent(layer,x,y,touchID,type)
+        {
+            var point = Pool.get(Point);
+            var self = this;
+            var touchMatrix = Pool.get(Matrix);
+            var list = layer.displayList;
+            var len = layer.displayNum;
+
+            point.x = x;
+            point.y = y;
+            layer.fromParentPoint(point);
+            
+            x = point.x;
+            y = point.y;
+
+            if( layer.visible == false && layer.touchEnabled == false )
+            {
+                return false;
+            }
+
+            for( var i = len - 1;i>=0;i-- )
+            {
+                var gameObect = list[i];
+                if( self.touchEvent( gameObect,x,y,touchID,type ) ) break;
+            }
+            if( x >= 0 && x <= layer.width && y >=0 &&y<= layer.height )
+            {
+                if( layer[type] )
+                {
+                    layer[type].call(layer,x,y,touchID);
+                    return true;
+                }
+            }
+
+            
+        }
+
         update()
         {
-            Loop.m_loop();
             var self = this;
+            self.onTouch();
+            Loop.m_loop();
             self.resetRender();
             //清除画布
             self.gl.clearColor(self.G_r, self.G_g, self.G_b, self.G_a);
@@ -251,8 +330,14 @@
             var positionBuffer = self.positionBuffer;
             if( positionBuffer == null ) self.positionBuffer = positionBuffer = self.gl.createBuffer();
             self.gl.bindBuffer(self.gl.ARRAY_BUFFER, positionBuffer)
-            self.gl.bufferData(self.gl.ARRAY_BUFFER,new Float32Array(self.posionList),self.gl.STATIC_DRAW);
-       
+            self.gl.bufferData(self.gl.ARRAY_BUFFER,self.posionList,self.gl.STATIC_DRAW);
+            self.spriteAProgram.bind();
+            self.spriteAProgram.uploadAttrib(0,4,self.gl.FLOAT);
+            self.spriteProgram.bind();
+            self.spriteProgram.uploadAttrib(0,4,self.gl.FLOAT);
+            
+            //顶点索引缓冲区
+            self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER,self.indexBuffer);
              for( var i = 0;i<self.randerList.length;i++ )
             {
                 self.render(self.randerList[i]);
@@ -263,7 +348,7 @@
         transform(layer,alpha,matrix)
         {
             var self = this;
-            var arr = self.posionList || (self.posionList = []);
+            var arr = self.posionList;
             var list = layer.displayList;
             var len = layer.displayNum;
             var alpha = layer.alpha * alpha;
@@ -272,16 +357,14 @@
                 var gameObect = list[i];
                 var oA = gameObect.alpha * alpha;
                 var tempMatrix = gameObect.matrix;
-                var x = gameObect.x - tempMatrix.tx;
-                var y = gameObect.y - tempMatrix.ty;
                 var childMatrix = Pool.get(Matrix);
                 childMatrix.set(
 					matrix.a * tempMatrix.a + matrix.c * tempMatrix.b,
 					matrix.b * tempMatrix.a + matrix.d * tempMatrix.b,
 					matrix.a * tempMatrix.c + matrix.c * tempMatrix.d,
 					matrix.b * tempMatrix.c + matrix.d * tempMatrix.d,
-					matrix.tx + matrix.a * x + matrix.c * y,
-					matrix.ty + matrix.b * x + matrix.d * y
+					matrix.tx + matrix.a * tempMatrix.tx + matrix.c * tempMatrix.ty,
+					matrix.ty + matrix.b * tempMatrix.tx + matrix.d * tempMatrix.ty
 				);
                 if( gameObect.visible && oA !== 0 )
                 {
@@ -374,11 +457,6 @@
             var shader = self.G_alpha != 1 ?  self.spriteAProgram : self.spriteProgram;
             shader.bind();
             shader.uploadUniform1f(1,self.G_alpha);
-            //顶点缓冲区
-            self.gl.bindBuffer(self.gl.ARRAY_BUFFER, self.positionBuffer)
-            shader.uploadAttrib(0,4,self.gl.FLOAT);
-            //顶点索引缓冲区
-            self.gl.bindBuffer(self.gl.ELEMENT_ARRAY_BUFFER,self.indexBuffer);
             //纹理
             self.gl.bindTexture(self.gl.TEXTURE_2D,this.G_texture);
             //绘制
@@ -387,6 +465,21 @@
         }
     }
     badyoo.registerClass(BYGL,"BYGL");
+
+    class Point
+    {
+        constructor(x = 0,y = 0)
+        {
+            this.x = x;
+            this.y = y;
+        }
+        setTo(x,y)
+        {
+            this.x = x;
+            this.y = y;
+        }
+    }
+    badyoo.registerClass(Point,"Point");
 
     class Matrix
     {
@@ -435,7 +528,22 @@
             this.tx *= x;
             this.ty *= y;
         }
-
+        invert(){
+             var a = this.a;
+             var b = this.b;
+             var c = this.c;
+             var d = this.d;
+             var tx = this.tx;
+             var i = a * d - b * c;
+     
+             this.a = d / i;
+             this.b = -b / i;
+             this.c = -c / i;
+             this.d = a / i;
+             this.tx = (c * this.ty - d * tx) / i;
+             this.ty = -(a * this.ty - b * tx) / i;
+             return this;
+        }
     }
     badyoo.registerClass(Matrix,"Matrix");
 
@@ -456,8 +564,8 @@
         static get(cla)
         {
             var key = cla.__class;
-            var arr = Pool[key] || (Pool[key] = []);
-            var obj = Pool[key].shift();
+            var arr = Pool.dr[key] || (Pool.dr[key] = []);
+            var obj = arr.shift();
             if( obj == null ) return new cla();
             return obj;
         }
@@ -465,7 +573,7 @@
         static set(cla,obj)
         {
             var key = cla.__class;
-            var arr = Pool[key] || (Pool[key] = []);
+            var arr = Pool.dr[key] || (Pool.dr[key] = []);
             arr.push(obj);
         }
     }
@@ -651,8 +759,8 @@
     {
         constructor()
         {
-            this.x = 0;
-            this.y = 0;
+            this.m_x = 0;
+            this.m_y = 0;
             this.width = 0;
             this.height = 0;
             this.alpha = 1;
@@ -664,7 +772,104 @@
             this.visible = true;
             this.blendMode = BlendMode.NORMAL;
             this.parent = null;
-            this.matrix = Pool.get(Matrix);
+            this.m_matrix = Pool.get(Matrix);
+            this.touchEnabled = false;
+            this.m_matrixChange = false;
+        }
+
+        get x()
+        {
+            return this.m_x;
+        }
+        set x(v)
+        {
+            if( this.m_x != v )
+            {
+                this.m_x = v;
+                this.m_matrixChange = true;
+            }
+        }
+        get y()
+        {
+            return this.m_y;
+        }
+        set y(v)
+        {
+            if( this.m_y != v )
+            {
+                this.m_y = v;
+                this.m_matrixChange = true;
+            }
+        }
+
+        get pivotX()
+        {
+            return this.m_pivotX;
+        }
+        set pivotX(v)
+        {
+            if( this.m_pivotX != v )
+            {
+                this.m_pivotX = v;
+                this.m_matrixChange = true;
+            }
+        }
+        get pivotY()
+        {
+            return this.m_pivotY;
+        }
+        set pivotY(v)
+        {
+            if( this.m_pivotY != v )
+            {
+                this.m_pivotY = v;
+                this.m_matrixChange = true;
+            }
+        }
+        get scaleX()
+        {
+            return this.m_scaleX;
+        }
+        set scaleX(v)
+        {
+            if( this.m_scaleX != v )
+            {
+                this.m_scaleX = v;
+                this.m_matrixChange = true;
+            }
+        }
+        get scaleY()
+        {
+            return this.m_scaleY;
+        }
+        set scaleY(v)
+        {
+            if( this.m_scaleY != v )
+            {
+                this.m_scaleY = v;
+                this.m_matrixChange = true;
+            }
+        }
+        set rotation(v)
+        {
+            if( this.m_rotation != v )
+            {
+                this.m_rotation = v;
+                this.m_matrixChange = true;
+            }
+        }
+        get rotation()
+        {
+            return this.m_rotation;
+        }
+        get matrix()
+        {
+            if( this.m_matrixChange ) this.updateMatrix();
+            return this.m_matrix;
+        }
+        set matrix(v)
+        {
+            this.m_matrix = v;
         }
 
         pivot(x,y)
@@ -673,80 +878,150 @@
             {
                 this.m_pivotX = x;
                 this.m_pivotY = y;
-                this.updateMatrix();
+                this.m_matrixChange = true;
             }
         }
-        getPivotX()
-        {
-            return this.m_pivotX;
-        }
-        getPivotY()
-        {
-            return this.m_pivotY;
-        }
-
         scale(x,y)
         {
             if( this.m_scaleX != x || this.m_scaleY != y  )
             {
                 this.m_scaleX = x;
                 this.m_scaleY = y;
-                this.updateMatrix();
+                this.m_matrixChange = true;
             }
         }
-        getScaleX()
-        {
-            return this.m_scaleX;
-        }
-        getScaleY()
-        {
-            return this.m_scaleY;
-        }
-
-        set rotation(v)
-        {
-            if( this.m_rotation != v )
-            {
-                this.m_rotation = v;
-                this.updateMatrix();
-            }
-        }
-        get rotation()
-        {
-            return this.m_rotation;
-        }
-
         updateMatrix()
         {
             var r = this.m_rotation;
             if( r == 0 )
             {
-                this.matrix.set(
+                this.m_matrix.set(
                     this.m_scaleX, 0.0, 0.0, this.m_scaleY, 
-                    this.m_scaleX * this.m_pivotX,this.m_scaleY* this.m_pivotY
+                    this.m_x - this.m_scaleX * this.m_pivotX,this.m_y - this.m_scaleY* this.m_pivotY
                 );
             }
             else
             {
-                r =  (360 - r) % 360;
+                r =  r % 360;
                 if( r < 0 ) r += 360;
 
                 var cos = Maths.cos[r];
                 var sin = Maths.sin[r];
-                this.matrix.a = this.m_scaleX *  cos;
-                this.matrix.b = this.m_scaleX *  -sin;
-                this.matrix.c = this.m_scaleY *  sin;
-                this.matrix.d = this.m_scaleY *  cos;
-                this.matrix.tx = this.m_pivotX * this.matrix.a - this.m_pivotY * this.matrix.c;
-                this.matrix.ty = this.m_pivotX * this.matrix.b - this.m_pivotY * this.matrix.d;
+                this.m_matrix.a = this.m_scaleX *  cos;
+                this.m_matrix.b = this.m_scaleX *  sin;
+                this.m_matrix.c = this.m_scaleY *  -sin;
+                this.m_matrix.d = this.m_scaleY *  cos;
+                this.m_matrix.tx = this.m_x - this.m_pivotX * this.m_matrix.a - this.m_pivotY * this.m_matrix.c;
+                this.m_matrix.ty = this.m_y - this.m_pivotX * this.m_matrix.b - this.m_pivotY * this.m_matrix.d;
             }
         }
-
+        toParentPoint(point)
+        {
+            var m = this.matrix;
+            var x = m.a * point.x + m.c * point.y + m.tx;
+            var y = m.b * point.x + m.d * point.y + m.ty;
+            point.x = x;
+            point.y = y;
+            return point;
+        }
+        fromParentPoint(point)
+        {
+            var m = this.matrix;
+            var ohter = Pool.get(Matrix);
+            ohter.set(m.a,m.b,m.c,m.d,m.tx,m.ty);
+            ohter.invert();
+            var x = ohter.a * point.x + ohter.c * point.y + ohter.tx;
+            var y = ohter.b * point.x + ohter.d * point.y + ohter.ty;
+            point.x = x;
+            point.y = y;
+            return point;
+        }
+        localToGlobal(point,newPoint = false,g = null) {
+            if (newPoint === true) point = Pool.get(Point).setTo(point.x,point.y);
+            var p = this;
+            g = g || badyoo.current.root;
+            while (p) 
+            {
+                if (p == g)
+                    break;
+                point = p.toParentPoint(point);
+                p = p.parent;
+            }
+            return point;
+        }
+        globalToLocal(point,newPoint = false,g = null) {
+            if (newPoint === true) point = Pool.get(Point).setTo(point.x,point.y);
+            var p = this;
+            g = g || badyoo.current.root;
+            var list = [];
+            while (p) {
+                if (p == g)
+                    break;
+                list.push(p);
+                p = p.parent;
+            }
+            var i = list.length - 1;
+            while (i >= 0) {
+                p = list[i];
+                point = p.fromParentPoint(point);
+                i--;
+            }
+            return point;
+        }
+        hitTest(point)
+        {
+            if( this.width == 0 || this.height == 0 ) return false;
+            if( point.x >= this.x && point.x<= this.x + this.width && point.y >= this.y && point.x<= this.y + this.height )
+                return true
+                
+            return false;
+        }
         move(x,y)
 		{
 			this.x = x;
 			this.y = y;
-		}
+        }
+        updateTouchEnabled()
+        {
+            this.touchEnabled = this.m_onTouchMove || this.m_onTouchDown || this.m_onTouchUp || this.m_onTouchOut;
+        }
+        get onTouchDown()
+        {
+            return this.m_onTouchDown;
+        }
+        set onTouchDown(v)
+        {
+            this.m_onTouchDown = v;
+            this.updateTouchEnabled();
+        }
+        get onTouchMove()
+        {
+            return this.m_onTouchMove;
+        }
+        set onTouchMove(v)
+        {
+            this.m_onTouchMove = v;
+            this.updateTouchEnabled();
+        }
+        get onTouchUp()
+        {
+            return this.m_onTouchUp;
+        }
+        set onTouchUp(v)
+        {
+            this.m_onTouchUp = v;
+            this.updateTouchEnabled();
+        }
+        get onTouchOut()
+        {
+            return this.m_onTouchOut;
+        }
+        set onTouchOut(v)
+        {
+            this.m_onTouchOut = v;
+            this.updateTouchEnabled();
+        }
+
         free(){}
     }
     badyoo.registerClass(GameObject,"GameObject");
@@ -865,6 +1140,7 @@
             super();
             this.displayList = [];
             this.displayNum = 0;
+            this.touchEnabled = true;
         }
 
         Instantiate(cla)
@@ -1037,15 +1313,9 @@
 
     }
     badyoo.registerClass(Lable,"Lable");
-
-    class Background extends GameObject
-    {
-
-    }
-    badyoo.registerClass(Background,"Background");
-
+    
     badyoo.current = new badyoo["BYGL"]();
-    badyoo["init"] = function(w,h,ac = true,c = null,r = null)
+    badyoo["power"] = function(w,h,ac = true,c = null,r = null)
     {
         badyoo.current.init(w,h,r,ac,c);
     };
@@ -1065,6 +1335,7 @@
         }
         return o;
     }
+    
+if( "module.exports" ) module.exports = badyoo;
 
 
-}(window));
