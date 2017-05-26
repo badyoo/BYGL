@@ -1,3 +1,5 @@
+(function(window)
+{
     'use strict';
     var badyoo = {};
     window["badyoo"] = badyoo;
@@ -62,8 +64,6 @@
         init(width,height,root,alignC,canvas)
         {
             var self = this;
-            if( root == null ) self.root = new Layer();
-            else self.root = new root();
             self.window = window;
             self.canvas = canvas;
             self.alignC = alignC;
@@ -95,7 +95,12 @@
                 return;
             }
             console.warn("init w:"+self.width+" h:"+self.height);
+            if( root == null ) self.root = new Layer();
+            else self.root = new root();
 
+            self.root.width = self.width;
+            self.root.height = self.height;
+            badyoo.root = self.root;
 
             var vs = `attribute vec4 a_position;
             uniform vec2 u_re;
@@ -150,8 +155,8 @@
             for( var i = 0;i<=360;i++ )
             {
                 var a = i * Math.PI / 180;
-                Maths.sin[i] = Math.sin(a);
-                Maths.cos[i] = Math.cos(a);
+                Maths.sin[i] = Number(Math.sin(a).toFixed(2));
+                Maths.cos[i] = Number(Math.cos(a).toFixed(2));
             }
             self.time = Date.now();
             var w = window;
@@ -167,20 +172,34 @@
                 //console.log(self.batch);
             }
 
-            self.canvas.addEventListener('mousedown',mouse);
-            self.canvas.addEventListener('mouseup',mouse);
-            self.canvas.addEventListener('mouseout',mouse)
-            self.canvas.addEventListener('mousemove',mouse);
             self.tListType = {
                 "mousedown":"onTouchDown",
                 "mouseup":"onTouchUp",
                 "mouseout":"onTouchOut",
-                "mousemove":"onTouchMove"
+                "mousemove":"onTouchMove",
+                "touchstart":"onTouchDown",
+                "touchend":"onTouchUp",
+                "touchcancel":"onTouchOut",
+                "touchmove":"onTouchMove"
             };
+            for( var str in self.tListType ) self.canvas.addEventListener(str,mouse);
 
             function mouse(e)
             {
-                self.tList.push(e);
+                  if( e.changedTouches )
+                  {
+                      var arr = e.changedTouches;
+                      for( var i = 0;i<arr.length;i++ )
+                      {
+                        var touch = arr[i];
+                        touch.type = e.type;
+                        self.tList.push(touch);
+                      }
+                  }
+                  else
+                  {
+                    self.tList.push(e);
+                  }
             }
 
         }
@@ -285,9 +304,6 @@
             point.x = x;
             point.y = y;
             layer.fromParentPoint(point);
-            
-            x = point.x;
-            y = point.y;
 
             if( layer.visible == false && layer.touchEnabled == false )
             {
@@ -297,9 +313,9 @@
             for( var i = len - 1;i>=0;i-- )
             {
                 var gameObect = list[i];
-                if( self.touchEvent( gameObect,x,y,touchID,type ) ) break;
+                if( self.touchEvent( gameObect,point.x,point.y,touchID,type ) ) break;
             }
-            if( x >= 0 && x <= layer.width && y >=0 &&y<= layer.height )
+            if( point.x >= 0 && point.x <= layer.width && point.y >=0 && point.y<= layer.height )
             {
                 if( layer[type] )
                 {
@@ -401,23 +417,25 @@
 
                             arr[this.index++] = tx;
                             arr[this.index++] = ty;
-                            arr[this.index++] = 0;
-                            arr[this.index++] = 0;
-
+                            arr[this.index++] = gameObect.m_texture.uv[0]; //u 
+                            arr[this.index++] = gameObect.m_texture.uv[1];  //v
+                           
                             arr[this.index++] = tx+wa;
                             arr[this.index++] = ty+wb;
-                            arr[this.index++] = 1;
-                            arr[this.index++] = 0;
-
+                            arr[this.index++] = gameObect.m_texture.uv[2]; //u2
+                            arr[this.index++] = gameObect.m_texture.uv[3]; //v
+                            
                             arr[this.index++] = tx+hc;
                             arr[this.index++] = ty+hd;
-                            arr[this.index++] = 0;
-                            arr[this.index++] = 1;
+                            arr[this.index++] = gameObect.m_texture.uv[4]; //u
+                            arr[this.index++] = gameObect.m_texture.uv[5]; //v2
 
                             arr[this.index++] = tx+wa+hc;
                             arr[this.index++] = ty+wb+hd;
-                            arr[this.index++] = 1;
-                            arr[this.index++] = 1;
+
+                            arr[this.index++] = gameObect.m_texture.uv[6]; //u2
+                            arr[this.index++] = gameObect.m_texture.uv[7]; //v2
+
                             this.drawNum+=6;
                         }
                     }
@@ -1022,7 +1040,10 @@
             this.updateTouchEnabled();
         }
 
-        free(){}
+        free()
+        {
+            if( this.parent ) this.parent.removeChild(this);
+        }
     }
     badyoo.registerClass(GameObject,"GameObject");
 
@@ -1038,6 +1059,7 @@
         load(url,handler)
         {
             var self = this;
+            self.type = "image";
             self.url = url;
             self.handler = handler;
             var image = new window.Image();
@@ -1055,32 +1077,65 @@
             }
         }
 
+        httpRequet(data,url,handler,method = "get",responseType = "text")
+        {
+            var self = this;
+            self.type = "httpRequet";
+            self.url = url;
+            self.handler = handler;
+            var ajax = new XMLHttpRequest();
+            ajax.open(method,url,true);
+            ajax.responseType = responseType;
+            ajax.setRequestHeader("Content-Type", "application/json");
+            if (data == null || typeof (data) == 'string') ajax.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            responseType = "arraybuffer";
+            if( responseType !== "arraybuffer" ) responseType = "text";
+            if( ajax.dataType ) ajax.dataType = responseType;
+            ajax.onerror = function (e) {
+                ajax.onerror = ajax.onload = ajax.onabort = null;
+                self.onloaded(ajax);
+            };
+            ajax.onabort = function (e) {
+                ajax.onerror = ajax.onload = ajax.onabort = null;
+                self.onloaded(ajax);
+            };
+            ajax.onload = function (e) {
+                ajax.onerror = ajax.onload = ajax.onabort = null;
+                self.onloaded(ajax);
+            };
+            ajax.send(data);
+        }
+
         onloaded(data)
         {
             if( data )
             {
-                var texture = new Texture(data);
-                texture.url = this.url;
-                Loader.assets[this.url] = texture;
-               
-                if( this.handler.length != null )
+                if( this.type == "image" )
                 {
-                    var len = this.handler.length;
-                    for( var i = 0;i<len;i++ )
-                    {
-                        this.handler[i].run(texture);
-                    }
-                    this.handler.length = 0;
+                    var texture = new Texture(data);
+                    texture.url = this.url;
+                    Loader.assets[this.url] = texture;
                 }
                 else
                 {
-                    this.handler.run(texture);
+                    var ajax = data;
+                    var status = ajax.status !== undefined ? ajax.status : 200;
+                    if (status === 200 || status === 204 || status === 0) 
+                    {
+                        Loader.assets[this.url] = ajax.response || ajax.responseText;
+                    }
+                    else {
+                        console.error("[" + ajax.status + "]" + ajax.statusText + ":" + ajax.responseURL);
+                    }
+                    
                 }
-                this.handler = null;
-                this.url = "";
-                this.type = "";
-                Pool.set(Loader,this);
-                delete Loader.pool[this.url];
+
+                if( this.type == "atlas" )
+                {
+                    this.parse(Loader.assets[this.url]);
+                    return;
+                }
+                this.onLoadCall()
             }
             else
             {
@@ -1088,9 +1143,90 @@
             }
         }
 
-        static load(url,handler)
+        parse(str)
         {
-           
+            var data = Loader.assets[this.url] = JSON.parse(str);
+            if( data.meta && data.meta.image )
+            {
+                Loader.load(data.meta.image,Handler.create(this,this.parseDone))
+            }
+        }
+        parseDone(tex)
+        {
+            var data = Loader.assets[this.url];
+            var arr = this.url.split(".");
+            var key = arr[0];
+            for( var str in data.frames )
+            {
+                var obj = data.frames[str];
+                var texture = new Texture(tex);
+                var x = obj.frame.x/texture.width;
+                var y = obj.frame.y/texture.height;
+                var w = x + obj.frame.w/texture.width;
+                var h = y + obj.frame.h/texture.height;
+                if( obj.rotated)
+                {
+                    texture.uv[0] = w;
+                    texture.uv[1] = y;
+                    texture.uv[2] = w;
+                    texture.uv[3] = h;
+                    texture.uv[4] = x;
+                    texture.uv[5] = y;
+                    texture.uv[6] = x;
+                    texture.uv[7] = h;
+                }
+                else
+                {
+                    texture.uv[0] = x;
+                    texture.uv[1] = y;
+                    texture.uv[2] = w;
+                    texture.uv[3] = y;
+                    texture.uv[4] = x;
+                    texture.uv[5] = h;
+                    texture.uv[6] = w;
+                    texture.uv[7] = h;
+                }
+                texture.url = key+"/"+str;
+                texture.width = obj.sourceSize.w;
+                texture.height = obj.sourceSize.h;
+                Texture.atlas[texture.url] = texture;
+            }
+            this.onLoadCall();
+        }
+        onLoadCall()
+        {
+            if( this.handler.length != null )
+            {
+                var len = this.handler.length;
+                for( var i = 0;i<len;i++ )
+                {
+                    this.handler[i].run(Loader.assets[this.url]);
+                }
+                this.handler.length = 0;
+            }
+            else
+            {
+                this.handler.run(Loader.assets[this.url]);
+            }
+            this.handler = null;
+            this.url = "";
+            this.type = "";
+            Pool.set(Loader,this);
+            delete Loader.pool[this.url];
+        }
+
+        static load(url,handler,type)
+        {
+           if( Texture.atlas[url] )
+           {
+               handler.run(Texture.atlas[url]);
+               return;
+           }
+           if( Loader.assets[url] )
+           {
+               handler.run(Loader.assets[url]);
+               return;
+           }
            var loader = Loader.pool[url];
            if( loader )
            {
@@ -1106,7 +1242,17 @@
            else
            {
                 loader = Loader.pool[url] = Pool.get(Loader);
-                loader.load(url,handler);
+                if(url.lastIndexOf(".json") > -1)
+                {
+                    loader.httpRequet(null,url,handler);
+                }
+                else
+                {
+                    loader.load(url,handler);
+                }
+
+                if( type != null ) loader.type = type;
+               
            }
         
            
@@ -1126,11 +1272,18 @@
         {
             this.width = data.width;
             this.height = data.height;
-            this.u = 1;
-            this.v = 1;
-            this.tex = badyoo.current.uploadTexture(data);
+            this.uv = 
+            [
+                0,0,
+                1,0,
+                0,1,
+                1,1
+            ]
+            if( data instanceof Texture == false ) this.tex = badyoo.current.uploadTexture(data);
+            else this.tex = data.tex;
         }
     }
+    Texture.atlas = {};
     badyoo.registerClass(Texture,"Texture");
 
     class Layer extends GameObject
@@ -1308,11 +1461,139 @@
     }
     badyoo.registerClass(Image,"Image");
 
-    class Lable extends GameObject
+    class Sprite extends Image
     {
+        constructor()
+        {
+            super();
+            this.fps = 30;
+            this.currentFrame = 0;
+            this.totalframes = 0;
+            this.currentAnimation = "";
+        }
+        set skin(v)
+        {
+            this.m_skin = v;
+            Loader.load(this.m_skin,Handler.create(this,this.skinLoaded),"atlas")
+        }
 
+        get skin()
+        {
+            return this.m_skin;
+        }
+        skinLoaded(v)
+        {
+            // if( v.url == this.m_skin )
+            // {
+                this.texture = v;
+            // }
+        }
+        play(animation)
+        {
+            this.currentAnimation = animation;
+        }
+        stop()
+        {
+
+        }
+        gotoAndStop(frame)
+        {
+
+        }
+        gotoAndPlay(frame)
+        {
+            
+        }
     }
-    badyoo.registerClass(Lable,"Lable");
+    badyoo.registerClass(Sprite,"Sprite");
+    class SpriteFont extends GameObject
+    {
+        constructor()
+        {
+            super();
+            this.m_text = "";
+            this.m_spacing = 0;
+            this.m_lineHeight = 0;
+            this.m_spaceWidth = 0;
+            this.m_skin = "";
+        }
+
+        get skin()
+        {
+            return this.m_skin;
+        }
+        set skin(v)
+        {
+            this.m_skin = v;
+            Loader.load(this.m_skin,Handler.create(this,this.skinLoaded))
+        }
+        skinLoaded(v)
+        {
+            if( v.url == this.m_skin )
+            {
+                this.texture = v;
+            }
+        }
+
+        get text()
+        {
+            return this.m_text;
+        }
+        set text(v)
+        {
+            this.m_text = v;
+        }
+        get spacing()
+        {
+            return this.m_spacing;
+        }
+        set spacing(v)
+        {
+            this.m_spacing = v;
+        }
+        get lineHeight()
+        {
+            return this.m_lineHeight;
+        }
+        set lineHeight(v)
+        {
+            this.m_lineHeight = v;
+        }
+        get spaceWidth()
+        {
+            return this.m_spaceWidth;
+        }
+        set spaceWidth(v)
+        {
+            this.m_spaceWidth = v;
+        }
+    }
+    badyoo.registerClass(SpriteFont,"SpriteFont");
+    class SoundMgr
+    {
+        static playSound(url,num)
+        {
+            SoundMgr.soundPool[url] = new Audio(url).play();
+        }
+        static stopSound(url)
+        {
+
+        }
+        static playMusic(url,num = -1)
+        {
+            var audio = new Audio(url);
+            audio.loop = num == -1;
+            audio.play();
+            SoundMgr.musicPool[url] = audio;
+        }
+        static stopMusic(url)
+        {
+
+        }
+    }
+    SoundMgr.soundPool = {};
+    SoundMgr.musicPool = {};
+    badyoo.registerClass(SoundMgr,"SoundMgr");
     
     badyoo.current = new badyoo["BYGL"]();
     badyoo["power"] = function(w,h,ac = true,c = null,r = null)
@@ -1335,7 +1616,5 @@
         }
         return o;
     }
-    
-if( "module.exports" ) module.exports = badyoo;
 
-
+}(window));
