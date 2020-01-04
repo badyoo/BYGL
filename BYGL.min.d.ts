@@ -1,6 +1,4 @@
-export = BadYoo;
-export as namespace BadYoo;
-declare namespace BadYoo 
+declare module badyoo 
 {
     function Instantiate(o:GameObject):GameObject
     function power(width:number = 0,height:number = 0,alignC:boolean = true,canvas:HTMLCanvasElement = null,root = null):void
