@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+<script src="vconsole.min.js"></script>
+<script> var vConsole = new VConsole();</script>
+<script src="BYGL.js"></script>
+<script>
+badyoo.power(0,0,false);
+badyoo.bgColor(0x333333);
+var layer = badyoo.Instantiate(badyoo.Layer);
+var arr = [];
+// for( var i = 0;i<3000;i++ )
+// {
+//     var image = layer.Instantiate(badyoo.Image);
+//     image.name = "name"+i;
+//     image.skin = Math.random() > 0.5 ? "leaves.jpg" : "tile.png";
+//     image.x = badyoo.Maths.random(0,800);
+//     image.y = badyoo.Maths.random(0,400);
+//     image.pivot(120,90);
+//     image.rotation = 90;
+//     image.globalToLocal(image.localToGlobal(new badyoo.Point()));
+//     image.onTouchDown = function()
+//     {
+//         console.log("dowm"+this.name);
+//     }
+//     var s = Math.random();
+//     image.scale(s,s);
+//     arr[i] = image;
+// }
+badyoo.Loop.update(this,a);
+function a()
+{
+    var num = arr.length;
+    for( var i = 1;i<num;i++ )
+    {
+        var image = arr[i]
+        image.rotation ++;
+    }
+}
+badyoo.Loader.load("assets.json",badyoo.Handler.create(this,load),"atlas");
+function load()
+{
+    for( var i = 0;i<1500;i++ )
+    {
+        var image = layer.Instantiate(badyoo.Image);
+        image.skin = Math.random() > 0.5 ? "assets/chi0000" : "assets/chi0001";
+        image.x = badyoo.Maths.random(0,800);
+        image.y = badyoo.Maths.random(0,400);
+        image.pivot(313>>1,327>>1);
+        var s = Math.random();
+        image.scale(s,s);
+        arr[i] = image;
+    }
+    for( var i = 0;i<1500;i++ )
+    {
+        var image = layer.Instantiate(badyoo.Image);
+        image.name = "name"+i;
+        image.skin = Math.random() > 0.5 ? "leaves.jpg" : "tile.png";
+        image.x = badyoo.Maths.random(0,800);
+        image.y = badyoo.Maths.random(0,400);
+        image.pivot(120,90);
+        image.rotation = 90;
+        image.onTouchDown = function()
+        {
+            console.log("dowm"+this.name);
+        }
+        1
+        var s = Math.random();
+        image.scale(s,s);
+        arr.push( image);
+    }
+}
+</script>
+
+    
+</body>
+</html>
