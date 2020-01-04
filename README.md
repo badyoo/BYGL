@@ -43,27 +43,27 @@
 * api Doc
 * 引擎代码提示 d.ts
 
-###如何快速开始
-#启动引擎
+# 如何快速开始
+	//启动引擎
 	badyoo.power();//(游戏宽,游戏高,舞台锚点是中心的,canvas,自定义根容器)
-#创建一个图片
-	对于unity/html开发者来说，你甚至不需要把他添加到舞台,不需要理解显示列表，容器
+	//创建一个图片
+	//对于unity/html开发者来说，你甚至不需要把他添加到舞台,不需要理解显示列表，容器
 	var Image = badyoo.Instantiate(badyoo.Image);//对象创建时会自动添加到舞台
 	image.skin = "leaves.jpg";
 
-	对于flash其他h5引擎开发者，什么图层容器都没太low了！
+	//对于flash其他h5引擎开发者，什么图层容器都没太low了！
 	var layer = badyoo.Instantiate(badyoo.Layer);//创建一个容器添加到舞台
 	var Image = layer.Instantiate(badyoo.Image);//创建一个图片添加到容器 layer
 	image.skin = "leaves.jpg";
 	
-	纳里！我是传统开发者！
+	//纳里！我是传统开发者！
 	//layer里熟悉的方法、属性 跟你用的flash 其他h5引擎一个样;
 	var layer = badyoo.Instantiate(badyoo.Layer);//创建一个容器添加到舞台
 	var Image = new badyoo.Image();//创建一个图片
 	image.skin = "leaves.jpg";
 	layer.addChild(Image);
 	
-	还不够！我要flash那套有Main入口文档类的！
+	//还不够！我要flash那套有Main入口文档类的！
 	//Main入口 文档类
 	class Main extends badyoo.Layer
 	{
@@ -79,5 +79,5 @@
 在游戏加载页或首页的任意可见位置注明：Powered by BYGL
 
 ### License
-[MIT License](http://en.wikipedia.org/wiki/MIT_License)
+[MIT License](https://github.com/badyoo/BYGL/blob/master/LICENSE)
 
