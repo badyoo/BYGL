@@ -327,9 +327,28 @@
             
         }
 
+        updateSprite()
+        {
+            var t = Date.now();
+            for( var i = 0,len = Sprite.pool.length;i<len;i++ )
+            {
+                var sp = Sprite.pool[i];
+                if( sp.loaded && sp.m_stop == false )
+                {
+                    var nextFrame = (t - sp.lastTime) / sp.interval | 0;
+                    if( nextFrame )
+                    {
+                        sp.gotoAndPlay(sp.currentFrame+nextFrame);
+                    }
+                   
+                }
+            }
+        }
+
         update()
         {
             var self = this;
+            self.updateSprite();
             self.onTouch();
             Loop.m_loop();
             self.resetRender();
@@ -1480,7 +1499,20 @@
             this.loop = true;
             this.m_frames = null;
             this.m_stop = false;
+            Sprite.pool.push(this);
         }
+
+        set fps(v)
+        {
+            this.m_fps = v;
+            this.interval = 1000/v;
+        }
+
+        get fps()
+        {
+            return this.m_fps;
+        }
+
         set skin(v)
         {
             this.m_skin = v;
@@ -1523,31 +1555,50 @@
         play()
         {
             this.m_stop = false; 
+            this.lastTime = Date.now();
         }
         stop()
         {
             this.m_stop = true;
+            this.lastTime = 0;
         }
         gotoAndStop(frame)
         {
-            if( frame > 0 && frame <=  this.totalframes ) 
+            if( frame > 0 ) 
             {
+                if( frame > this.totalframes ) 
+                {
+                    if( this.loop ) frame = frame % this.totalframes;
+                    else frame = this.totalframes; 
+                }
                 this.currentFrame = frame;
                 this.stop();
-                this.texture = Texture.atlas[this.m_frames[this.currentFrame]];
+                this.texture = Texture.atlas[this.m_frames[this.currentFrame-1]];
             }
         }
         gotoAndPlay(frame)
         {
-            if( frame > 0 && frame <=  this.totalframes ) 
+            if( frame > 0 ) 
             {
+                if( frame > this.totalframes ) 
+                {
+                    if( this.loop ) frame = frame % this.totalframes;
+                    else frame = this.totalframes; 
+                }
                 this.currentFrame = frame;
                 this.play();
-                this.texture = Texture.atlas[this.m_frames[this.currentFrame]];
+                this.texture = Texture.atlas[this.m_frames[this.currentFrame-1]];
             }
+        }
+
+        free()
+        {
+            Sprite.pool.splice(Sprite.pool.indexOf(this),1);
+            super.free();
         }
     }
     Sprite.AniPool = {};
+    Sprite.pool = [];
     badyoo.registerClass(Sprite,"Sprite");
     class SpriteFont extends GameObject
     {
