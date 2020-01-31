@@ -1154,8 +1154,10 @@
         parseDone(tex)
         {
             var data = Loader.assets[this.url];
+            data.url = this.url;
             var arr = this.url.split(".");
             var key = arr[0];
+            var spData = Sprite.AniPool[this.url] = {};
             for( var str in data.frames )
             {
                 var obj = data.frames[str];
@@ -1187,6 +1189,9 @@
                     texture.uv[7] = h;
                 }
                 texture.url = key+"/"+str;
+                var frameName = str.slice(0,str.length -4);
+                var frames = spData[frameName] || ( spData[frameName] = [] );
+                frames.push(texture.url);
                 texture.width = obj.sourceSize.w;
                 texture.height = obj.sourceSize.h;
                 Texture.atlas[texture.url] = texture;
@@ -1414,9 +1419,11 @@
         constructor()
         {
             super();
+            this.loaded = false;
         }
         set skin(v)
         {
+            this.loaded = false;
             this.m_skin = v;
             Loader.load(this.m_skin,Handler.create(this,this.skinLoaded))
         }
@@ -1428,7 +1435,7 @@
 
         skinLoaded(v)
         {
-            if( v.url == this.m_skin ) this.texture = v;
+            if( v.url == this.m_skin ) this.texture = v, this.loaded = true;
         }
 
         set texture(v)
@@ -1470,10 +1477,14 @@
             this.currentFrame = 0;
             this.totalframes = 0;
             this.currentAnimation = "";
+            this.loop = true;
+            this.m_frames = null;
+            this.m_stop = false;
         }
         set skin(v)
         {
             this.m_skin = v;
+            this.loaded = false;
             Loader.load(this.m_skin,Handler.create(this,this.skinLoaded),"atlas")
         }
 
@@ -1483,28 +1494,60 @@
         }
         skinLoaded(v)
         {
-            // if( v.url == this.m_skin )
-            // {
-                this.texture = v;
-            // }
+            if( v.url == this.m_skin )
+            {
+                this.loaded = true;
+                if( this.currentAnimation != "" )
+                {
+                    this.playAni(this.currentAnimation);
+                }
+            }
         }
-        play(animation)
+        playAni(animation)
         {
             this.currentAnimation = animation;
+            this.totalframes = this.currentFrame = 0;
+            
+            if( this.loaded )
+            {
+                this.m_frames = Sprite.AniPool[this.m_skin][this.currentAnimation];
+                if( this.m_frames )
+                {
+                    this.totalframes = this.m_frames.length;
+                    if( this.m_stop ) this.gotoAndStop(1);
+                    else this.gotoAndPlay(1);
+                    
+                }
+            }
+        }
+        play()
+        {
+            this.m_stop = false; 
         }
         stop()
         {
-
+            this.m_stop = true;
         }
         gotoAndStop(frame)
         {
-
+            if( frame > 0 && frame <=  this.totalframes ) 
+            {
+                this.currentFrame = frame;
+                this.stop();
+                this.texture = Texture.atlas[this.m_frames[this.currentFrame]];
+            }
         }
         gotoAndPlay(frame)
         {
-            
+            if( frame > 0 && frame <=  this.totalframes ) 
+            {
+                this.currentFrame = frame;
+                this.play();
+                this.texture = Texture.atlas[this.m_frames[this.currentFrame]];
+            }
         }
     }
+    Sprite.AniPool = {};
     badyoo.registerClass(Sprite,"Sprite");
     class SpriteFont extends GameObject
     {
