@@ -155,8 +155,8 @@
             for( var i = 0;i<=360;i++ )
             {
                 var a = i * Math.PI / 180;
-                Maths.sin[i] = Number(Math.sin(a).toFixed(2));
-                Maths.cos[i] = Number(Math.cos(a).toFixed(2));
+                Maths.sin[i] = Number(Math.sin(a).toFixed(8));
+                Maths.cos[i] = Number(Math.cos(a).toFixed(8));
             }
             self.time = Date.now();
             var w = window;
