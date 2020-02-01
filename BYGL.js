@@ -1,5 +1,13 @@
 (function(window)
 {
+    /**
+     * author badyoo
+     * QQ Group:293864103
+     * website:http://www.616ko.com
+     * weibo:http://weibo.com/badyoo
+     * github:https://github.com/badyoo/BYGL
+     * License https://github.com/badyoo/BYGL/blob/master/LICENSE
+     */
     'use strict';
     var badyoo = {};
     window["badyoo"] = badyoo;
