@@ -13,9 +13,11 @@
 # 作者
 * [badyoo](https://github.com/badyoo)
 * QQ:547243998
+* 微博:http://weibo.com/badyoo
 
 # 网站
 * http://www.616ko.com/
+* QQ群:293864103
 
 # 功能
 * WebGL
