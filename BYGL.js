@@ -1249,6 +1249,7 @@
 
         static load(url,handler,type)
         {
+           if( url == null ) return;
            if( Texture.atlas[url] )
            {
                handler.run(Texture.atlas[url]);
@@ -1492,6 +1493,13 @@
         {
             this.m_height = v;
         }
+
+        free()
+        {
+            this.m_texture = null;
+            this.loaded = false;
+            super.free();
+        }
     }
     badyoo.registerClass(Image,"Image");
 
@@ -1616,34 +1624,62 @@
             this.m_text = "";
             this.m_spacing = 0;
             this.m_lineHeight = 0;
-            this.m_spaceWidth = 0;
-            this.m_skin = "";
+            this.m_spaceWidth = 10;
+            this.m_font = "";
+            this.m_align = "left";
+            this.m_valign = "top";
+            this.loaded = false;
+            this.displayList = [];
+            this.displayNum = 0;
+            this.touchEnabled = true;
         }
 
-        get skin()
+        get font()
         {
-            return this.m_skin;
+            return this.m_font;
         }
-        set skin(v)
+        set font(v)
         {
-            this.m_skin = v;
-            Loader.load(this.m_skin,Handler.create(this,this.skinLoaded))
+            this.m_font = v;
         }
-        skinLoaded(v)
-        {
-            if( v.url == this.m_skin )
-            {
-                this.texture = v;
-            }
-        }
-
         get text()
         {
             return this.m_text;
         }
         set text(v)
         {
-            this.m_text = v;
+            if( v != this.m_text )
+            {
+                if( v == null ) v = "";
+                this.m_lastText = this.m_text;
+                this.m_text = v;
+                var i = 0;
+                var len = this.displayList.length;
+                if( SpriteFont.fontPool[this.m_font] )
+                {
+                    this.displayNum = this.m_text.length;
+                    for( ;i<this.displayNum;i++ )
+                    {
+                        if( this.m_lastText[i] != this.m_text[i] )
+                        {
+                            var image =  this.displayList[i];
+                            if( image == null ) this.displayList[i] = image = Pool.get(Image);
+                            image.skin = SpriteFont.fontPool[this.m_font][this.m_text[i]];
+                            image.x = i * 38;
+                        }
+                    }
+                }
+                for( ;i<len;i++ )
+                {
+                    var image = this.displayList[i];
+                    image.free();
+                    Pool.set(Image,image);
+                    this.displayList.splice(i,1);
+                    i--;
+                    len--;
+                }      
+            }
+           
         }
         get spacing()
         {
@@ -1669,7 +1705,24 @@
         {
             this.m_spaceWidth = v;
         }
+        get align()
+        {
+            return this.m_align;
+        }
+        set align(v)
+        {
+            return this.m_align;
+        }
+        get valign()
+        {
+            return this.m_valign;
+        }
+        set valign(v)
+        {
+            return this.m_valign;
+        }
     }
+    SpriteFont.fontPool = {};
     badyoo.registerClass(SpriteFont,"SpriteFont");
     class SoundMgr
     {
@@ -1717,6 +1770,41 @@
             badyoo.current.root["addChild"](o);
         }
         return o;
+    }
+
+    badyoo["loadFont"] = function(url,width,height,set = "")
+    {
+        Loader.load(url,Handler.create(this,function(tex)
+        {
+            var arr = url.split(".");
+            var key = arr[0];
+            var v = tex.width/width | 0;
+            var hy = -1;
+            var fontData = SpriteFont.fontPool[url] = {};
+            for( var i =  0;i<set.length;i++ )
+            {
+                var wx = i % v;
+                if(  wx == 0 ) hy ++;
+                var texture = new Texture(tex);
+                var x = wx * width / texture.width;
+                var y = hy * height / texture.height;
+                var w = x + width/texture.width;
+                var h = y + height/texture.height;
+                texture.uv[0] = x;
+                texture.uv[1] = y;
+                texture.uv[2] = w;
+                texture.uv[3] = y;
+                texture.uv[4] = x;
+                texture.uv[5] = h;
+                texture.uv[6] = w;
+                texture.uv[7] = h;
+                texture.url = key+"/"+set[i];
+                texture.width = width;
+                texture.height = height;
+                Texture.atlas[texture.url] = texture;
+                fontData[set[i]] = texture.url;
+            }
+        }))
     }
 
 }(window));
