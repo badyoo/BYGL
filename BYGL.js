@@ -424,7 +424,9 @@
                                 || ( oA != self.G_alpha ))
                             {
                                 self.randerList.push([self.drawNum,self.drawStart,self.G_texture,self.G_NBlendMode,self.G_alpha]);
-                                self.drawStart = i*12;//原先是*6，但是显示异常，多间隔一个矩形，显示就不会异常了，不知道为什么~
+                                //self.drawStart = i*12;//原先是*6，但是显示异常，多间隔一个矩形，显示就不会异常了，不知道为什么~
+                                //补上面注释，因为我看错单位了，偏移是以字节为单位，我以为是以顶点数为单位
+                                self.drawStart += self.drawNum*2;//修复多层嵌套显然异常的bug
                                 self.drawNum = 0;
                             }
 
@@ -463,7 +465,7 @@
                             arr[this.index++] = gameObect.m_texture.uv[6]; //u2
                             arr[this.index++] = gameObect.m_texture.uv[7]; //v2
 
-                            this.drawNum+=6;
+                            self.drawNum+=6;
                         }
                     }
                 }
@@ -1622,6 +1624,8 @@
         {
             super();
             this.m_text = "";
+            this.m_textWidth = 0;
+            this.m_textHeight = 0;
             this.m_spacing = 0;
             this.m_lineHeight = 0;
             this.m_spaceWidth = 10;
@@ -1651,36 +1655,63 @@
             if( v != this.m_text )
             {
                 if( v == null ) v = "";
-                this.m_lastText = this.m_text;
-                this.m_text = v;
-                var i = 0;
-                var len = this.displayList.length;
-                if( SpriteFont.fontPool[this.m_font] )
-                {
-                    this.displayNum = this.m_text.length;
-                    for( ;i<this.displayNum;i++ )
-                    {
-                        if( this.m_lastText[i] != this.m_text[i] )
-                        {
-                            var image =  this.displayList[i];
-                            if( image == null ) this.displayList[i] = image = Pool.get(Image);
-                            image.skin = SpriteFont.fontPool[this.m_font][this.m_text[i]];
-                            image.x = i * 38;
-                        }
-                    }
-                }
-                for( ;i<len;i++ )
-                {
-                    var image = this.displayList[i];
-                    image.free();
-                    Pool.set(Image,image);
-                    this.displayList.splice(i,1);
-                    i--;
-                    len--;
-                }      
+                this.updateText(v);
             }
            
         }
+
+        get textWidth()
+        {
+            return this.m_textWidth;
+        }
+
+        get textHeight()
+        {
+            return this.m_textHeight;
+        }
+
+        updateText(v)
+        {
+            if( v != null )
+            {
+                this.m_text = v;
+            }
+            var i = 0;
+            var len = this.displayList.length;
+            var startX = 0;
+            this.m_textHeight = this.m_textWidth = 0;
+            if( SpriteFont.fontPool[this.m_font] )
+            {
+                this.displayNum = this.m_text.length;
+                for( ;i<this.displayNum;i++ )
+                {
+                    var image =  this.displayList[i];
+                    if( image == null ) this.displayList[i] = image = Pool.get(Image);
+                    image.skin = SpriteFont.fontPool[this.m_font][this.m_text[i]];
+                    image.x = this.m_textWidth;
+                    this.m_textWidth += image.width + this.m_spacing;
+                }
+
+                if( this.m_align == "right" ) startX = this.width - this.m_textWidth;
+                if( this.m_align == "center" ) startX = this.width - this.m_textWidth>>1;
+
+                for( i = 0;i<this.displayNum;i++ )
+                {
+                    var image = this.displayList[i];
+                    image.x += startX;
+                }
+            }
+            for( ;i<len;i++ )
+            {
+                var image = this.displayList[i];
+                image.free();
+                Pool.set(Image,image);
+                this.displayList.splice(i,1);
+                i--;
+                len--;
+            }      
+        }
+
         get spacing()
         {
             return this.m_spacing;
@@ -1711,7 +1742,12 @@
         }
         set align(v)
         {
-            return this.m_align;
+            this.m_align = v;
+            // if( this.m_align !== v )
+            // {
+            //     this.m_align = v;
+            //     this.updateText()
+            // }
         }
         get valign()
         {
@@ -1719,7 +1755,12 @@
         }
         set valign(v)
         {
-            return this.m_valign;
+            this.m_valign = v;
+            // if( this.m_valign !== v )
+            // {
+            //     this.m_valign = v;
+            //     this.updateText()
+            // }
         }
     }
     SpriteFont.fontPool = {};
