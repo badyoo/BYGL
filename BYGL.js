@@ -68,6 +68,7 @@
             this.tList = [];
             this.G_a = this.G_r = this.G_g = this.G_b = 0;
             this.G_m = new Matrix();
+            this.G_tp = new Point();
         }        
         init(width,height,root,alignC,canvas)
         {
@@ -75,8 +76,6 @@
             self.window = window;
             self.canvas = canvas;
             self.alignC = alignC;
-            if( width ) self.width = width;
-            if( height ) self.height = height;
 
             if(  self.canvas == null )
             {
@@ -88,8 +87,11 @@
                 window.document.body.appendChild(self.canvas);
             }
 
-            self.canvas.width = self.width ? self.width : self.width = window.innerWidth;
-            self.canvas.height = self.height ? self.height : self.height = window.innerHeight;
+            self.width = self.canvas.width = window.innerWidth;
+            self.height = self.canvas.height = window.innerHeight;
+
+            if( width ) self.width = width;
+            if( height ) self.height = height;
 
             self.gl = self.canvas.getContext("webgl",
             { 
@@ -112,11 +114,11 @@
 
             var vs = `attribute vec4 a_position;
             uniform vec2 u_re;
+            uniform vec2 u_offest;
             varying vec2 v_texCoord;
             void main() {
                 v_texCoord = a_position.zw;
-                vec2 temp = a_position.xy * u_re`+ (self.alignC == false ? "-1.0;" :";")+
-            `
+                vec2 temp = a_position.xy * u_re + u_offest;
                 gl_Position = vec4(temp.x,-temp.y,0,1);
             }`;
             var fs = `
@@ -141,22 +143,40 @@
             }`
             ;
 
+            var scale = self.gl.canvas.width/self.width;
+            if( self.gl.canvas.height < self.gl.canvas.width ) scale = self.gl.canvas.height/self.height;
+            self.G_m.set(scale,0,0,scale,0,0);
+
+            var px = 2/self.gl.canvas.width * self.G_m.a;
+            var py = 2/self.gl.canvas.height * self.G_m.d;
+            var tx,ty = 0;
+
+            if( self.alignC == false )
+            {
+                tx = -1 + (self.gl.canvas.width - self.width * self.G_m.a)/self.gl.canvas.width;
+                ty = -1 + (self.gl.canvas.height - self.height * self.G_m.d)/self.gl.canvas.height;
+                self.G_m.tx = self.gl.canvas.width - self.width * self.G_m.a >> 1;
+                self.G_m.ty = self.gl.canvas.height - self.height * self.G_m.d >> 1;
+            }
             var shader = new Shader(vs,fsA);
             shader.AttribLocation("a_position");
             shader.AttriUniformLocation("u_re");
+            shader.AttriUniformLocation("u_offest");
             shader.AttriUniformLocation("u_alpha");
             shader.bind();
-
-            var px = 2/self.gl.canvas.width;
-            var py = 2/self.gl.canvas.height;
             shader.uploadUniform2f(0,px,py);
+            shader.uploadUniform2f(1,tx,ty);
             self.spriteAProgram = shader;
+
             var shader = new Shader(vs,fs);
             shader.AttribLocation("a_position");
             shader.AttriUniformLocation("u_re");
+            shader.AttriUniformLocation("u_offest");
             shader.bind();
             shader.uploadUniform2f(0,px,py);
+            shader.uploadUniform2f(1,tx,ty);
             self.spriteProgram = shader;
+
             var quadNum = 16384;
             self.indexBuffer = self.createIndexBuffer(quadNum);
             self.posionList = new Float32Array(new ArrayBuffer(quadNum*4*16));
@@ -289,12 +309,10 @@
             {
                 var e = this.tList[i];
                 var touchID = e.identifier || 0;
-                var touchX = e.pageX || e.clientX;
-                var touchY = e.pageY || e.clientY;
-
-                if( this.alignC ) touchX -= this.width>>1,touchY -= this.height>>1;
-                    
-                this.touchEvent(this.root,touchX,touchY,touchID,this.tListType[e.type]);
+                this.G_tp.setTo(e.pageX || e.clientX,e.pageY || e.clientY);
+                this.root.fromParentPoint(this.G_tp,this.G_m);
+                //console.log(this.G_tp.x,this.G_tp.y);
+                this.touchEvent(this.root,this.G_tp.x,this.G_tp.y,touchID,this.tListType[e.type]);
             }
 
             this.tList.length = 0;
@@ -470,6 +488,7 @@
                     }
                 }
 
+                childMatrix.i();
                 Pool.set(Matrix,childMatrix);
             }
         }
@@ -503,7 +522,7 @@
 
             var shader = self.G_alpha != 1 ?  self.spriteAProgram : self.spriteProgram;
             shader.bind();
-            shader.uploadUniform1f(1,self.G_alpha);
+            shader.uploadUniform1f(2,self.G_alpha);
             //纹理
             self.gl.bindTexture(self.gl.TEXTURE_2D,this.G_texture);
             //绘制
@@ -971,9 +990,9 @@
             point.y = y;
             return point;
         }
-        fromParentPoint(point)
+        fromParentPoint(point,m)
         {
-            var m = this.matrix;
+            if( m == null ) m = this.matrix;
             var ohter = Pool.get(Matrix);
             ohter.set(m.a,m.b,m.c,m.d,m.tx,m.ty);
             ohter.invert();
