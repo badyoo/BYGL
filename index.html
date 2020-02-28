@@ -11,7 +11,7 @@
 <script> var vConsole = new VConsole();</script>
 <script src="BYGL.js"></script>
 <script>
-badyoo.power(0,0,false);
+badyoo.power(800,450,false);
 badyoo.bgColor(0x333333);
 var layer = badyoo.Instantiate(badyoo.Layer);
 var arr = [];
@@ -44,18 +44,55 @@ function a()
     }
 }
 badyoo.Loader.load("assets.json",badyoo.Handler.create(this,load),"atlas");
+function load2()
+{
+    badyoo.loadFont("text.png",38,38,"0123456789+x连击");
+    
+    var sf = layer.Instantiate(badyoo.SpriteFont);
+    sf.width = 300;
+    sf.font = "text.png"
+    sf.align = "right";
+    sf.text = "连击+100";
+    sf.move(400,200);
+
+    var sf = layer.Instantiate(badyoo.SpriteFont);
+    sf.width = 300;
+    sf.font = "text.png"
+    sf.text = "连击+100";
+    sf.move(400,300);
+
+    var sf = layer.Instantiate(badyoo.SpriteFont);
+    sf.width = 300;
+    sf.font = "text.png"
+    sf.align = "center";
+    sf.text = "连击+100";
+    sf.move(400,100);
+
+    var num = 0;
+    badyoo.Loop.update(this,function()
+    {
+        sf.text = "连击+" + num;
+        num++;
+    });
+}
 function load()
 {
+    var image = layer.Instantiate(badyoo.Image);
+    image.skin = "leaves.jpg";
+    image.width = 800;
+    image.height = 450;
     for( var i = 0;i<1500;i++ )
     {
-        var image = layer.Instantiate(badyoo.Image);
-        image.skin = Math.random() > 0.5 ? "assets/chi0000" : "assets/chi0001";
-        image.x = badyoo.Maths.random(0,800);
-        image.y = badyoo.Maths.random(0,400);
-        image.pivot(313>>1,327>>1);
+        var sprite = layer.Instantiate(badyoo.Sprite);
+        sprite.fps = 30;
+        sprite.skin = "assets.json";
+        sprite.x = 0;
+        sprite.y = 0;
         var s = Math.random();
-        image.scale(s,s);
-        arr[i] = image;
+        sprite.scale(s,s);
+        arr[i] = sprite;
+        sprite.playAni(Math.random() > 0.5 ? "player" : "yu1");
+        sprite.pivot(sprite.width>>1,sprite.height>>1);
     }
     for( var i = 0;i<1500;i++ )
     {
@@ -75,6 +112,8 @@ function load()
         image.scale(s,s);
         arr.push( image);
     }
+
+    badyoo.Loader.load("text.png",badyoo.Handler.create(this,load2));
 }
 </script>
 
