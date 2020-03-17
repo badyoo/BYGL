@@ -35,13 +35,13 @@
 * 声音
 * 可选锚点（默认中心,可选左上角）
 * 背景色
-
-# 开发中功能
-* TS/JS es6 工作流
+* TS/JS es6 工作流(https://github.com/badyoo/FastCodeJS)
 * 图集逐帧动画 Sprite
 * 自适应
+
+# 开发中功能
 * 平台标识
-* 图集文本
+* 图集文本(demo阶段)
 * api Doc
 * 引擎代码提示 d.ts
 
