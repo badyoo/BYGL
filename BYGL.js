@@ -544,6 +544,12 @@
             this.x = x;
             this.y = y;
         }
+        distance(x,y)
+        {
+            var dx = x - this.x;
+            var dy = y - this.y;
+            return Math.sqrt(dx*dx+dy*dy);
+        }
     }
     badyoo.registerClass(Point,"Point");
 
@@ -631,7 +637,7 @@
         {
             var key = cla.__class;
             var arr = Pool.dr[key] || (Pool.dr[key] = []);
-            var obj = arr.shift();
+            var obj = arr.pop();
             if( obj == null ) return new cla();
             return obj;
         }
@@ -1041,6 +1047,10 @@
                 return true
                 
             return false;
+        }
+        hitTestObject(o)
+        {
+            return !(o.x+o.width < this.x || o.y+o.height < this.y || o.x > this.x+this.width || o.y > this.y+this.height);
         }
         move(x,y)
 		{
@@ -1830,6 +1840,23 @@
             badyoo.current.root["addChild"](o);
         }
         return o;
+    }
+
+    badyoo["Destroy"] = function(o,t = 0)
+    {
+        if( o.free != null )
+        {
+            if( t > 0 )
+            {
+                setTimeout(() => {
+                    o.free();
+                }, t);
+            }
+            else
+            {
+                o.free();
+            }
+        }
     }
 
     badyoo["loadFont"] = function(url,width,height,set = "")
