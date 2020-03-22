@@ -214,6 +214,7 @@
 
             function mouse(e)
             {
+                  e.preventDefault();
                   if( e.changedTouches )
                   {
                       var arr = e.changedTouches;
@@ -1798,7 +1799,9 @@
     {
         static playSound(url,num)
         {
-            SoundMgr.soundPool[url] = new Audio(url).play();
+            var sound = SoundMgr.soundPool[url];
+            if( sound == null ) sound = SoundMgr.soundPool[url] = new Audio(url);
+            sound.play();
         }
         static stopSound(url)
         {
